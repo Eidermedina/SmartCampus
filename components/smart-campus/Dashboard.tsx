@@ -172,7 +172,7 @@ const AdminDashboard: React.FC = () => {
               <View style={[styles.statIconCircle, { backgroundColor: `${colors.success}15` }]}>
                 <Ionicons name="calendar" size={20} color={colors.success} />
               </View>
-              <ThemedText style={styles.adminStatValue} numberOfLines={1} adjustsFontSizeToFit>{reservations.filter(r => r.status === 'CONFIRMADA').length}</ThemedText>
+              <ThemedText style={styles.adminStatValue} numberOfLines={1} adjustsFontSizeToFit>{reservations.filter(r => (r.status || '').toUpperCase() === 'CONFIRMADA').length}</ThemedText>
               <ThemedText style={styles.adminStatLabel} numberOfLines={1} adjustsFontSizeToFit>RESERVAS ACTIVAS</ThemedText>
             </View>
             <View style={[styles.adminStatItem, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
@@ -438,8 +438,8 @@ export const Dashboard: React.FC = () => {
     return <AdminDashboard />;
   }
 
-  // Filter reservations by user
-  const reservations = allReservations.filter(r => r.userName.toUpperCase() === (userName || '').toUpperCase());
+  // Use reservations directly from useCampus hook as they are already filtered by userId
+  const reservations = allReservations;
 
   const renderHeader = () => {
     return (
@@ -452,7 +452,7 @@ export const Dashboard: React.FC = () => {
 
   const renderStats = () => {
     // Calcular horas de estudio reales basadas en reservas confirmadas
-    const confirmedReservations = reservations.filter(r => r.status === 'CONFIRMADA');
+    const confirmedReservations = reservations.filter(r => (r.status || '').toUpperCase() === 'CONFIRMADA');
     let totalHours = 0;
     confirmedReservations.forEach(r => {
       // Intentar extraer duración si existe, o asumir 1.5 horas por defecto
