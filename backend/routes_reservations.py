@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Form, Path
+from fastapi import APIRouter, Form, Path, HTTPException
 from typing import Optional
 from datetime import datetime
 from db_utils import fetch_all, fetch_one, execute_returning
@@ -75,6 +75,35 @@ async def create_reservation(
         start_time = start_time.replace(tzinfo=None)
     if end_time.tzinfo:
         end_time = end_time.replace(tzinfo=None)
+
+    day_of_week = start_time.weekday() # 0 is Monday
+    from datetime import time as dt_time
+    py_start = dt_time(start_time.hour, start_time.minute)
+    py_end = dt_time(end_time.hour, end_time.minute)
+
+    # 1. Must fall within an ACTIVE and FREE schedule
+    availability = await fetch_all("""
+        SELECT * FROM space_schedules
+        WHERE space_id = $1 AND day_of_week = $2 AND is_active = TRUE AND is_free = TRUE
+        AND start_time <= $3 AND end_time >= $4
+    """, space_id, day_of_week, py_start, py_end)
+
+    if not availability:
+        raise HTTPException(status_code=400, detail="Este horario no ha sido habilitado para reservas por el administrador.")
+
+    # 2. Must NOT overlap with any ACTIVE and BLOCKED (is_free=FALSE) schedule
+    conflicts = await fetch_all("""
+        SELECT * FROM space_schedules
+        WHERE space_id = $1 AND day_of_week = $2 AND is_active = TRUE AND is_free = FALSE
+        AND (
+            (start_time <= $3 AND end_time > $3) OR
+            (start_time < $4 AND end_time >= $4) OR
+            (start_time >= $3 AND end_time <= $4)
+        )
+    """, space_id, day_of_week, py_start, py_end)
+
+    if conflicts:
+        raise HTTPException(status_code=400, detail="Este horario está bloqueado por una clase o actividad fija.")
 
     query = """
         INSERT INTO reservations (user_id, space_id, start_time, end_time, status, type, group_id)

@@ -16,6 +16,9 @@ export interface Space {
   capacity: string;
   status: SpaceStatus;
   floor?: number;
+  isActive: boolean;
+  imageUrl?: string;
+  building_id: number;
 }
 
 export interface Reservation {
@@ -52,6 +55,7 @@ interface CampusContextType {
   reports: Report[];
   // Actions
   toggleSpaceStatus: (id: string, status: SpaceStatus) => Promise<void>;
+  toggleSpaceActive: (id: string) => Promise<void>;
   addReport: (report: any) => Promise<void>;
   updateReportStatus: (id: string, status: ReportStatus) => Promise<void>;
   refreshData: () => Promise<void>;
@@ -88,7 +92,10 @@ export function CampusProvider({ children }: { children: ReactNode }) {
             block: s.block || 'Edificio Principal',
             capacity: s.capacity?.toString() || '0',
             status: s.status as SpaceStatus,
-            floor: s.floor
+            floor: s.floor,
+            isActive: s.is_active !== false,
+            imageUrl: s.image_url,
+            building_id: s.building_id
           }));
           if (JSON.stringify(mappedSpaces) !== JSON.stringify(spacesRef.current)) {
             setSpaces(mappedSpaces);
@@ -178,6 +185,17 @@ export function CampusProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const toggleSpaceActive = async (id: string) => {
+    try {
+      await fetch(`${API_URL}/spaces/${id}/toggle-active`, {
+        method: 'PATCH'
+      });
+      await refreshData();
+    } catch (error) {
+      console.error('Error toggling space active:', error);
+    }
+  };
+
   const addReport = async (newReport: any) => {
     try {
       const formData = new FormData();
@@ -211,6 +229,7 @@ export function CampusProvider({ children }: { children: ReactNode }) {
       reservations,
       reports,
       toggleSpaceStatus,
+      toggleSpaceActive,
       addReport,
       updateReportStatus,
       refreshData,

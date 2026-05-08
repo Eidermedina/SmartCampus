@@ -40,7 +40,7 @@ const SpaceCategory = ({
   );
 };
 
-const SpaceItem = ({ title, capacity, category, status, onPress }: { title: string, capacity: string, category: string, status: string, onPress: () => void }) => {
+const SpaceItem = ({ title, capacity, category, status, imageUrl, onPress }: { title: string, capacity: string, category: string, status: string, imageUrl?: string, onPress: () => void }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isAvailable = status === 'available';
@@ -63,7 +63,11 @@ const SpaceItem = ({ title, capacity, category, status, onPress }: { title: stri
     <View style={[styles.spaceItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.spaceLeft}>
         <View style={styles.imagePlaceholder}>
-           <Ionicons name={getIcon()} size={22} color={colors.primary} />
+          {imageUrl ? (
+             <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%', borderRadius: 12 }} />
+          ) : (
+             <Ionicons name={getIcon()} size={22} color={colors.primary} />
+          )}
         </View>
         <View style={styles.spaceInfo}>
           <View style={styles.spaceHeader}>
@@ -98,22 +102,21 @@ const AdminSpaceCard: React.FC<{
   message?: string;
   type: 'image' | 'icon' | 'details';
   icon?: keyof typeof Ionicons.glyphMap;
-  onToggle?: (newStatus: SpaceStatus) => void;
-}> = ({ id, title, location, capacity, occupancy, status, statusLabel, tag, message, type, icon, onToggle }) => {
+  isActive: boolean;
+  onToggle?: () => void;
+}> = ({ id, title, location, capacity, occupancy, status, statusLabel, tag, message, type, icon, onToggle, isActive }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isLight = colorScheme === 'light';
 
   const getStatusColor = () => {
-    if (status === 'available') return colors.success;
-    if (status === 'occupied') return colors.error;
-    return '#FF9500'; // Maintenance
+    if (isActive) return colors.success;
+    return colors.error;
   };
 
   const getStatusText = () => {
-    if (status === 'available') return 'HABILITADO';
-    if (status === 'occupied') return 'OCUPADO';
-    return 'MANTENIMIENTO';
+    if (isActive) return 'HABILITADO';
+    return 'DESHABILITADO';
   };
 
   return (
@@ -148,11 +151,10 @@ const AdminSpaceCard: React.FC<{
           <View style={styles.statusToggleContainer}>
              <ThemedText style={styles.toggleLabel}>{statusLabel || getStatusText()}</ThemedText>
               <TouchableOpacity onPress={() => {
-                const newStatus = status === 'available' ? 'occupied' : 'available';
-                if (onToggle) onToggle(newStatus);
+                if (onToggle) onToggle();
               }}>
-                <Ionicons name={status === 'occupied' ? "toggle" : "toggle-outline"} size={32} color={getStatusColor()} />
-             </TouchableOpacity>
+                <Ionicons name={isActive ? "toggle" : "toggle-outline"} size={32} color={getStatusColor()} />
+              </TouchableOpacity>
           </View>
         </View>
         {message && (
@@ -169,8 +171,9 @@ const AdminSpaceCard: React.FC<{
 // --- SCREENS ---
 
 const AdminSpacesScreen = () => {
-  const { spaces, toggleSpaceStatus, isLoaded } = useCampus();
+  const { spaces, toggleSpaceActive, isLoaded } = useCampus();
   const [activeFilter, setActiveFilter] = useState('Todas las Áreas');
+  const router = useRouter();
 
   if (!isLoaded) return <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ThemedText>Cargando panel...</ThemedText></ThemedView>;
   const colorScheme = useColorScheme() ?? 'light';
@@ -249,17 +252,19 @@ const AdminSpacesScreen = () => {
           {renderFilters()}
           <View style={styles.adminList}>
             {filteredSpaces.map(s => (
-              <AdminSpaceCard 
-                key={s.id}
-                id={s.id}
-                type={s.category === 'auditorio' ? 'image' : 'icon'} 
-                title={s.title} 
-                location={s.block} 
-                capacity={s.capacity}
-                status={s.status} 
-                icon={s.category === 'laboratorios' ? 'flask-outline' : 'business-outline'}
-                onToggle={(newStatus) => toggleSpaceStatus(s.id, newStatus)}
-              />
+              <TouchableOpacity key={s.id} onPress={() => router.push(`/spaces/${s.id}`)}>
+                <AdminSpaceCard 
+                  id={s.id}
+                  type={s.category === 'auditorio' ? 'image' : 'icon'} 
+                  title={s.title} 
+                  location={s.block} 
+                  capacity={s.capacity}
+                  status={s.status} 
+                  isActive={s.isActive}
+                  icon={s.category === 'laboratorios' ? 'flask-outline' : 'business-outline'}
+                  onToggle={() => toggleSpaceActive(s.id)}
+                />
+              </TouchableOpacity>
             ))}
           </View>
         </View>
@@ -362,6 +367,7 @@ export default function SpacesScreen() {
               capacity={s.capacity} 
               category={s.category} 
               status={s.status}
+              imageUrl={s.imageUrl}
               onPress={() => handleReserve(s)} 
             />
           ))}
