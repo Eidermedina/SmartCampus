@@ -1,0 +1,177 @@
+from fastapi import APIRouter, Form, Path
+from typing import Optional
+from datetime import datetime
+from db_utils import fetch_all, fetch_one, execute_returning
+
+router = APIRouter(prefix="/reservations", tags=["Reservations"])
+
+@router.get("/")
+async def read_reservations(user_id: Optional[int] = None):
+    if user_id:
+        query = """
+            SELECT DISTINCT r.*, s.name as space_title, p.first_name || ' ' || p.last_name as user_name
+            FROM reservations r
+            JOIN spaces s ON r.space_id = s.id
+            LEFT JOIN users u ON r.user_id = u.id
+            LEFT JOIN people p ON u.person_id = p.id
+            LEFT JOIN group_members gm ON r.group_id = gm.group_id
+            WHERE r.user_id = $1 OR gm.user_id = $1
+            ORDER BY r.created_at DESC
+        """
+        return await fetch_all(query, user_id)
+    else:
+        query = """
+            SELECT r.*, s.name as space_title, p.first_name || ' ' || p.last_name as user_name
+            FROM reservations r
+            JOIN spaces s ON r.space_id = s.id
+            LEFT JOIN users u ON r.user_id = u.id
+            LEFT JOIN people p ON u.person_id = p.id
+            ORDER BY r.created_at DESC
+        """
+        return await fetch_all(query)
+
+@router.get("/{id}")
+async def read_reservation(id: int = Path(...)):
+    # Detailed query for admin
+    query = """
+        SELECT r.*, s.name as space_title, b.name as building_name,
+               p.first_name || ' ' || p.last_name as user_name,
+               sp.major as user_major, u.email as user_email,
+               sg.name as group_name
+        FROM reservations r
+        JOIN spaces s ON r.space_id = s.id
+        JOIN buildings b ON s.building_id = b.id
+        LEFT JOIN users u ON r.user_id = u.id
+        LEFT JOIN people p ON u.person_id = p.id
+        LEFT JOIN student_profiles sp ON u.id = sp.user_id
+        LEFT JOIN study_groups sg ON r.group_id = sg.id
+        WHERE r.id = $1
+    """
+    res = await fetch_one(query, "Reservation not found", id)
+    if res and res.get("group_id"):
+        members_query = """
+            SELECT p.first_name || ' ' || p.last_name as name, sp.major
+            FROM group_members gm
+            JOIN users u ON gm.user_id = u.id
+            JOIN people p ON u.person_id = p.id
+            JOIN student_profiles sp ON u.id = sp.user_id
+            WHERE gm.group_id = $1
+        """
+        res["members"] = await fetch_all(members_query, res["group_id"])
+    return res
+
+@router.post("/")
+async def create_reservation(
+    user_id: int = Form(...),
+    space_id: int = Form(...),
+    start_time: datetime = Form(...),
+    end_time: datetime = Form(...),
+    status: str = Form(default="REVISIÓN"),
+    type: Optional[str] = Form(default=None),
+    group_id: Optional[int] = Form(default=None)
+):
+    # Make datetimes naive to avoid asyncpg offset-naive vs offset-aware errors
+    if start_time.tzinfo:
+        start_time = start_time.replace(tzinfo=None)
+    if end_time.tzinfo:
+        end_time = end_time.replace(tzinfo=None)
+
+    query = """
+        INSERT INTO reservations (user_id, space_id, start_time, end_time, status, type, group_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+    """
+    row = await execute_returning(query, None, user_id, space_id, start_time, end_time, status, type, group_id)
+    
+    # If group_id is provided, also link study_groups.reservation_id
+    if group_id:
+        try:
+            await execute_returning("UPDATE study_groups SET reservation_id = $1 WHERE id = $2 RETURNING id", None, row["id"], group_id)
+        except Exception as e:
+            print(f"Error linking group to reservation: {e}")
+    
+    return row
+    
+    # 🔔 Notificar admins
+    try:
+        # Obtener nombre del espacio y del usuario para la notificación
+        space = await fetch_one("SELECT name FROM spaces WHERE id = $1", None, space_id)
+        user_info = await fetch_one("""
+            SELECT p.first_name || ' ' || p.last_name as name 
+            FROM users u JOIN people p ON u.person_id = p.id 
+            WHERE u.id = $1
+        """, None, user_id)
+
+        admins = await fetch_all("""
+            SELECT u.id FROM users u
+            JOIN user_has_role uhr ON u.id = uhr.user_id
+            JOIN roles r ON uhr.role_id = r.id
+            WHERE r.description = 'admin'
+        """)
+
+        for admin in admins:
+            await execute_returning(
+                "INSERT INTO notifications (user_id, title, description, type) VALUES ($1, $2, $3, 'alert')",
+                None,
+                admin["id"],
+                "Nueva Solicitud de Reserva",
+                f"{user_info['name']} ha solicitado {space['name']}"
+            )
+    except Exception as e:
+        print(f"Error notifying admins about reservation: {e}")
+
+    return {"id": row["id"]}
+
+@router.put("/{id}")
+async def update_reservation_status(
+    id: int = Path(...),
+    status: str = "REVISIÓN"
+):
+    # Obtener el space_id actual para actualizar su estado
+    res = await fetch_one("SELECT space_id FROM reservations WHERE id = $1", None, id)
+    
+    query = "UPDATE reservations SET status = $1 WHERE id = $2 RETURNING id, space_id"
+    row = await execute_returning(query, "Reservation not found", status, id)
+    
+    return {"updated": row["id"]}
+
+@router.put("/{id}/full")
+async def update_reservation_full(
+    id: int = Path(...),
+    user_id: int = Form(...),
+    space_id: int = Form(...),
+    start_time: datetime = Form(...),
+    end_time: datetime = Form(...),
+    status: str = Form(...),
+    type: Optional[str] = Form(default=None),
+    priority: str = Form(default="NORMAL"),
+    details: Optional[str] = Form(default=None)
+):
+    query = """
+        UPDATE reservations
+        SET user_id = $1, space_id = $2, start_time = $3, end_time = $4, status = $5, type = $6, priority = $7, details = $8
+        WHERE id = $9
+        RETURNING id
+    """
+    row = await execute_returning(query, "Reservation not found", user_id, space_id, start_time, end_time, status, type, priority, details, id)
+    
+    # Si la reserva se cancela o rechaza, liberar el espacio si no hay otras activas
+    if status in ['CANCELADA', 'RECHAZADA']:
+        try:
+            # Solo liberar si no hay otras reservas CONFIRMADA o REVISIÓN para este espacio en este momento
+            # Para simplificar el requerimiento del usuario, lo liberamos directamente
+            await execute_returning("UPDATE spaces SET status = 'available' WHERE id = $1 RETURNING id", None, space_id)
+        except Exception as e:
+            print(f"Error releasing space: {e}")
+    elif status in ['CONFIRMADA', 'REVISIÓN']:
+        try:
+            await execute_returning("UPDATE spaces SET status = 'occupied' WHERE id = $1 RETURNING id", None, space_id)
+        except Exception as e:
+            print(f"Error marking space occupied: {e}")
+
+    return {"updated": row["id"]}
+
+@router.delete("/{id}")
+async def delete_reservation(id: int = Path(...)):
+    row = await execute_returning("DELETE FROM reservations WHERE id = $1 RETURNING id", "Reservation not found", id)
+    return {"deleted": row["id"]}
