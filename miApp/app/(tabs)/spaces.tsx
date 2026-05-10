@@ -40,10 +40,10 @@ const SpaceCategory = ({
   );
 };
 
-const SpaceItem = ({ title, capacity, category, status, imageUrl, onPress }: { title: string, capacity: string, category: string, status: string, imageUrl?: string, onPress: () => void }) => {
+const SpaceItem = ({ title, capacity, category, status, imageUrl, onPress, isActive }: { title: string, capacity: string, category: string, status: string, imageUrl?: string, onPress: () => void, isActive: boolean }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const isAvailable = status === 'available';
+  const isAvailable = status === 'available' && isActive !== false;
   
   const getIcon = () => {
     switch(category) {
@@ -55,12 +55,13 @@ const SpaceItem = ({ title, capacity, category, status, imageUrl, onPress }: { t
   };
 
   const getStatusColor = () => {
+    if (isActive === false) return colors.error;
     if (status === 'available') return colors.success;
     if (status === 'occupied') return colors.error;
     return '#FF9500'; // Maintenance
   };
   return (
-    <View style={[styles.spaceItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[styles.spaceItem, { backgroundColor: colors.card, borderColor: colors.border, opacity: isActive === false ? 0.8 : 1 }]}>
       <View style={styles.spaceLeft}>
         <View style={styles.imagePlaceholder}>
           {imageUrl ? (
@@ -74,7 +75,9 @@ const SpaceItem = ({ title, capacity, category, status, imageUrl, onPress }: { t
             <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
             <ThemedText style={styles.spaceTitle} numberOfLines={1}>{title}</ThemedText>
           </View>
-          <ThemedText style={styles.spaceCapacity} numberOfLines={1}>Capacidad: {capacity} • {status.toUpperCase()}</ThemedText>
+          <ThemedText style={styles.spaceCapacity} numberOfLines={1}>
+            Capacidad: {capacity} • {isActive === false ? 'BLOQUEADO' : status.toUpperCase()}
+          </ThemedText>
         </View>
       </View>
       <TouchableOpacity 
@@ -82,7 +85,9 @@ const SpaceItem = ({ title, capacity, category, status, imageUrl, onPress }: { t
         onPress={onPress}
         disabled={!isAvailable}
       >
-        <ThemedText style={styles.apartarBtnText}>{isAvailable ? 'Apartar' : 'Ocupado'}</ThemedText>
+        <ThemedText style={styles.apartarBtnText}>
+          {isActive === false ? 'Bloqueado' : (isAvailable ? 'Apartar' : 'Ocupado')}
+        </ThemedText>
       </TouchableOpacity>
     </View>
   );
@@ -368,6 +373,7 @@ export default function SpacesScreen() {
               category={s.category} 
               status={s.status}
               imageUrl={s.imageUrl}
+              isActive={s.isActive}
               onPress={() => handleReserve(s)} 
             />
           ))}

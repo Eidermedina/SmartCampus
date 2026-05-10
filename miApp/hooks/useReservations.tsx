@@ -43,7 +43,9 @@ export function ReservationProvider({ children }: { children: ReactNode }) {
         date: new Date(r.start_time).toLocaleDateString(),
         time: `${r.start_time.substring(11, 16)} - ${r.end_time.substring(11, 16)}`,
         status: r.status as ReservationStatus,
-        type: r.type || 'ESTUDIO'
+        type: r.type || 'ESTUDIO',
+        priority: r.priority || 'NORMAL',
+        message: r.details
       })));
     } catch (error) {
       console.error('Error fetching reservations:', error);
@@ -66,11 +68,18 @@ export function ReservationProvider({ children }: { children: ReactNode }) {
       formData.append('status', 'REVISIÓN');
       if (newRes.groupId) formData.append('group_id', newRes.groupId);
       if (newRes.type) formData.append('type', newRes.type);
+      if (newRes.priority) formData.append('priority', newRes.priority);
+      if (newRes.details) formData.append('details', newRes.details);
 
-      await fetch(`${API_URL}/reservations/`, { method: 'POST', body: formData });
+      const res = await fetch(`${API_URL}/reservations/`, { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Error al crear la reserva');
+      }
       refreshReservations();
     } catch (error) {
       console.error('Error adding reservation:', error);
+      throw error;
     }
   };
 

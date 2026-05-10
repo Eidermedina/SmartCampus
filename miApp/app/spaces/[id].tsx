@@ -22,7 +22,7 @@ export default function SpaceDetailScreen() {
   const colors = Colors[colorScheme];
   const isLight = colorScheme === 'light';
   const router = useRouter();
-  const { spaces, isLoaded } = useCampus();
+  const { spaces, isLoaded, refreshData } = useCampus();
   const { addReservation } = useReservations();
   const { role, userName, userId } = useRole();
   const { addNotification, sendNotificationToUser } = useNotifications();
@@ -280,6 +280,7 @@ export default function SpaceDetailScreen() {
       const res = await fetch(`${API_URL}/spaces/${id}/toggle-active`, { method: 'PATCH' });
       const data = await res.json();
       setSpaceActive(data.is_active);
+      await refreshData();
       Alert.alert('Estado actualizado', `El espacio ahora está ${data.is_active ? 'HABILITADO' : 'DESHABILITADO'}`);
     } catch (e) {
       Alert.alert('Error', 'No se pudo cambiar el estado del espacio');
@@ -637,7 +638,7 @@ export default function SpaceDetailScreen() {
     );
   }
 
-  const handleReserve = () => {
+  const handleReserve = async () => {
     if (selectedTimes.length === 0) {
       Alert.alert('Error', 'Selecciona al menos un horario');
       return;
@@ -662,22 +663,26 @@ export default function SpaceDetailScreen() {
     const startTimeISO = `${year}-${month}-${day}T${String(startH).padStart(2, '0')}:00:00`;
     const endTimeISO = `${year}-${month}-${day}T${String(endH).padStart(2, '0')}:00:00`;
 
-    addReservation({
-      spaceId: space.id,
-      spaceTitle: space.title,
-      userName: userName || 'Usuario',
-      role: (role || 'student').toUpperCase(),
-      date: currentRealDate,
-      time: selectedTimes.join(', '),
-      startTime: startTimeISO,
-      endTime: endTimeISO,
-      type: space.category.toUpperCase(),
-      details: groupName ? `Grupo: ${groupName}` : undefined,
-      groupId: currentGroupId
-    });
+    try {
+      await addReservation({
+        spaceId: space.id,
+        spaceTitle: space.title,
+        userName: userName || 'Usuario',
+        role: (role || 'student').toUpperCase(),
+        date: currentRealDate,
+        time: selectedTimes.join(', '),
+        startTime: startTimeISO,
+        endTime: endTimeISO,
+        type: space.category.toUpperCase(),
+        details: groupName ? `Grupo: ${groupName}` : undefined,
+        groupId: currentGroupId
+      });
 
-    Alert.alert('Reserva en Revisión', 'Tu reserva ha sido enviada y está pendiente de aprobación por el administrador.');
-    router.replace('/profile/reservations');
+      Alert.alert('Reserva en Revisión', 'Tu reserva ha sido enviada y está pendiente de aprobación por el administrador.');
+      router.replace('/profile/reservations');
+    } catch (e: any) {
+      Alert.alert('Error en Reserva', e.message || 'No se pudo completar la reserva. Intenta de nuevo.');
+    }
   };
 
   return (
