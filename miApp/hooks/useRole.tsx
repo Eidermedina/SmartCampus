@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { API_URL } from '@/constants/Config';
-
-export type UserRole = 'student' | 'teacher' | 'admin';
+import React, { createContext, useContext, ReactNode, useEffect } from 'react';
+import { useAuthStore, UserRole } from '@/store/useAuthStore';
+export type { UserRole };
 
 interface RoleContextType {
   role: UserRole;
@@ -14,73 +13,47 @@ interface RoleContextType {
   setUserName: (name: string) => void;
   setUserMajor: (major: string) => void;
   isAuthenticated: boolean;
-  login: (id: string) => void;
+  login: (id: string, token: string) => void;
   logout: () => void;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<UserRole>('student');
-  const [userName, setUserName] = useState('CARGANDO...');
-  const [userMajor, setUserMajor] = useState('');
-  const [userStatus, setUserStatus] = useState('ACTIVO');
-  const [studentId, setStudentId] = useState('N/A');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  const [userId, setUserId] = useState<string>('');
+  const role = useAuthStore(state => state.userRole);
+  const userName = useAuthStore(state => state.userName);
+  const userMajor = useAuthStore(state => state.userMajor);
+  const userId = useAuthStore(state => state.userId) || '';
+  const userStatus = useAuthStore(state => state.userStatus);
+  const studentId = useAuthStore(state => state.studentId);
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const login = useAuthStore(state => state.login);
+  const logout = useAuthStore(state => state.logout);
+  const fetchProfile = useAuthStore(state => state.fetchProfile);
 
   useEffect(() => {
-    if (!isAuthenticated || !userId) return;
-
-    const fetchProfile = async () => {
-      try {
-        const res = await fetch(`${API_URL}/profiles/${userId}`);
-        const data = await res.json();
-
-        if (!res.ok || data.error || data.detail) {
-          console.error("Profile fetch error:", data);
-          setUserName("Usuario");
-          return;
-        }
-
-        setUserName(data.full_name || 'Usuario Desconocido');
-        setUserMajor(data.major || 'Sin información');
-        setUserStatus(data.status ? data.status.toUpperCase() : 'DESCONOCIDO');
-        setStudentId(data.student_id || 'N/A');
-        setRole(data.role ? data.role.toLowerCase() as UserRole : 'student');
-      } catch (error) {
-        console.error('Error fetching profile:', error);
-        setUserName('Usuario');
-      }
-    };
-    fetchProfile();
+    if (isAuthenticated && userId) {
+      fetchProfile();
+    }
   }, [isAuthenticated, userId]);
 
-  const login = (id: string) => {
-    setUserId(id);
-    setIsAuthenticated(true);
-  };
-  const logout = () => {
-    setIsAuthenticated(false);
-    setUserId('');
+  const contextValue: RoleContextType = {
+    role,
+    userName,
+    userMajor,
+    userId,
+    userStatus,
+    studentId,
+    setRole: (r) => useAuthStore.setState({ userRole: r }),
+    setUserName: (n) => useAuthStore.setState({ userName: n }),
+    setUserMajor: (m) => useAuthStore.setState({ userMajor: m }),
+    isAuthenticated,
+    login,
+    logout
   };
 
   return (
-    <RoleContext.Provider value={{ 
-      role, 
-      userName, 
-      userMajor, 
-      userId, 
-      userStatus,
-      studentId,
-      setRole, 
-      setUserName,
-      setUserMajor,
-      isAuthenticated, 
-      login, 
-      logout 
-    }}>
+    <RoleContext.Provider value={contextValue}>
       {children}
     </RoleContext.Provider>
   );
