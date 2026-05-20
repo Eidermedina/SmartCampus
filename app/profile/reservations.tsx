@@ -116,7 +116,7 @@ export default function ReservationsScreen() {
 
   const displayReservations = role === 'admin' 
     ? reservations.filter((r: any) => r.status === 'REVISIÓN') 
-    : reservations.filter((r: any) => r.creatorId === userId);
+    : reservations;
 
   return (
     <ThemedView style={[styles.container, { backgroundColor: colors.background }]}>

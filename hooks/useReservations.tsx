@@ -27,12 +27,14 @@ interface ReservationContextType {
 const ReservationContext = createContext<ReservationContextType | undefined>(undefined);
 
 export function ReservationProvider({ children }: { children: ReactNode }) {
-  const { userId } = useRole();
+  const { userId, role } = useRole();
   const [reservations, setReservations] = useState<Reservation[]>([]);
 
   const refreshReservations = async () => {
+    if (!userId) return;
     try {
-      const res = await fetch(`${API_URL}/reservations/`);
+      const url = role === 'admin' ? `${API_URL}/reservations/` : `${API_URL}/reservations/?user_id=${userId}`;
+      const res = await fetch(url);
       const data = await res.json();
       setReservations(data.map((r: any) => ({
         id: r.id.toString(),
@@ -56,7 +58,7 @@ export function ReservationProvider({ children }: { children: ReactNode }) {
     refreshReservations();
     const interval = setInterval(refreshReservations, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [userId, role]);
 
   const addReservation = async (newRes: any) => {
     try {
