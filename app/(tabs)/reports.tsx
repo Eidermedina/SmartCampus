@@ -11,7 +11,8 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -212,6 +213,10 @@ export default function ReportsScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingAction, setPendingAction] = useState<'camera' | 'gallery' | null>(null);
   const [showOptions, setShowOptions] = useState(false);
+  
+  const [isCameraVisible, setIsCameraVisible] = useState(false);
+  const cameraRef = useRef<any>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   // 1. Recuperar la imagen y el estado del formulario tras reinicio
   useEffect(() => {
@@ -272,13 +277,17 @@ export default function ReportsScreen() {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       if (action === 'camera') {
-        // High stability mode for Android OOM issues
-        result = await ImagePicker.launchCameraAsync({
-          allowsEditing: false,
-          quality: 0.2,
-          base64: false,
-          exif: false,
-        });
+        if (!cameraPermission?.granted) {
+          const permission = await requestCameraPermission();
+          if (!permission.granted) {
+            Alert.alert("Permisos necesarios", "La app necesita acceso a cámara.");
+            setShowOptions(false);
+            return;
+          }
+        }
+        setShowOptions(false);
+        setIsCameraVisible(true);
+        return; // Detenemos aquí, la cámara nativa (inline) se encargará del resto
       } else {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -637,6 +646,44 @@ export default function ReportsScreen() {
                 <ThemedText style={styles.noResultsText}>No hay espacios disponibles con estos filtros.</ThemedText>
               )}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Inline Camera Modal to prevent Android OOM kills */}
+      <Modal visible={isCameraVisible} animationType="slide" transparent={false} onRequestClose={() => setIsCameraVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <CameraView 
+            style={{ flex: 1 }} 
+            facing="back" 
+            ref={cameraRef}
+          />
+          
+          <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'transparent', flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end', paddingBottom: 40 }}>
+            <TouchableOpacity
+              style={{ position: 'absolute', top: 50, right: 20, padding: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 }}
+              onPress={() => setIsCameraVisible(false)}
+            >
+              <Ionicons name="close" size={30} color="#FFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ width: 70, height: 70, borderRadius: 35, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: 'rgba(255,255,255,0.5)' }}
+              onPress={async () => {
+                if (cameraRef.current) {
+                  try {
+                    const photo = await cameraRef.current.takePictureAsync({ quality: 0.3 });
+                    if (photo) {
+                      setImageUri(photo.uri);
+                      setIsCameraVisible(false);
+                    }
+                  } catch (e) {
+                    Alert.alert("Error", "No se pudo capturar la foto.");
+                  }
+                }
+              }}
+            >
+              <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: 'white', borderWidth: 2, borderColor: '#000' }} />
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

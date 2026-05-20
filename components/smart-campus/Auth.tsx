@@ -90,7 +90,7 @@ export const Auth: React.FC = () => {
         } else {
           setSuccessMessage('Iniciando sesión...');
           setTimeout(() => {
-            login(data.user_id, data.token);
+            login(data.user_id, data.token, data.refresh_token);
           }, 1000);
         }
       }

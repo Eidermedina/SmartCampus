@@ -282,24 +282,24 @@ const AdminSpacesScreen = () => {
 export default function SpacesScreen() {
   const { role, userName } = useRole();
   const { spaces, isLoaded } = useCampus();
-
-  if (!isLoaded) return <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ThemedText>Cargando espacios...</ThemedText></ThemedView>;
-
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isLight = colorScheme === 'light';
-  const blocks = Array.from(new Set(spaces.filter(s => s && s.category === 'salones').map(s => s.block)));
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('salones');
-  const [selectedBlock, setSelectedBlock] = useState<string>(blocks[0] || 'Bloque A');
+  const [selectedBlock, setSelectedBlock] = useState<string>('Bloque A');
   const [selectedFloor, setSelectedFloor] = useState<number>(1);
   const [searchText, setSearchText] = useState('');
+  const router = useRouter();
 
+  if (!isLoaded) return <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ThemedText>Cargando espacios...</ThemedText></ThemedView>;
+
+  if (role === 'admin') return <AdminSpacesScreen />;
+
+  const blocks = Array.from(new Set(spaces.filter(s => s && s.category === 'salones').map(s => s.block)));
   const availableFloors = Array.from(new Set(
     spaces.filter(s => s && s.category === 'salones' && s.block === selectedBlock && s.floor !== undefined)
           .map(s => s.floor)
   )).sort((a: any, b: any) => a - b) as number[];
-
-  if (role === 'admin') return <AdminSpacesScreen />;
 
   const filtered = spaces.filter(s => {
     if (!s) return false;
@@ -315,7 +315,6 @@ export default function SpacesScreen() {
     return true;
   });
 
-  const router = useRouter();
   const handleReserve = (space: any) => {
      router.push(`/spaces/${space.id}`);
   };

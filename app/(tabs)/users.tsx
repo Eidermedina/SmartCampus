@@ -134,15 +134,19 @@ export default function UsersScreen() {
   };
 
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const fullName = u.full_name || '';
+    const email = u.email || '';
+    const role = u.role || '';
+
+    const matchesSearch = fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      email.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 
     if (activeFilter === 'Todos los Usuarios') return true;
-    if (activeFilter === 'Estudiantes' && u.role.toLowerCase() === 'student') return true;
-    if (activeFilter === 'Docentes' && u.role.toLowerCase() === 'teacher') return true;
-    if (activeFilter === 'Admin' && u.role.toLowerCase() === 'admin') return true;
+    if (activeFilter === 'Estudiantes' && role.toLowerCase() === 'student') return true;
+    if (activeFilter === 'Docentes' && role.toLowerCase() === 'teacher') return true;
+    if (activeFilter === 'Admin' && role.toLowerCase() === 'admin') return true;
     return false;
   });
 

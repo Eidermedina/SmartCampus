@@ -13,7 +13,7 @@ interface RoleContextType {
   setUserName: (name: string) => void;
   setUserMajor: (major: string) => void;
   isAuthenticated: boolean;
-  login: (id: string, token: string) => void;
+  login: (id: string, token: string, refreshToken?: string) => void;
   logout: () => void;
 }
 

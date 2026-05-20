@@ -75,7 +75,9 @@ export default function ProfileScreen() {
         >
           <View style={styles.profileHeader}>
             <View>
-              <ThemedText style={[styles.profileLabel, { color: colors.primary }]}>PERFIL DEL {role === 'student' ? 'ESTUDIANTE' : 'DOCENTE'}</ThemedText>
+              <ThemedText style={[styles.profileLabel, { color: colors.primary }]}>
+                PERFIL DEL {role === 'student' ? 'ESTUDIANTE' : role === 'teacher' ? 'DOCENTE' : 'ADMINISTRADOR'}
+              </ThemedText>
               <ThemedText style={styles.profileName}>{userName}</ThemedText>
               <ThemedText style={styles.profileSub} numberOfLines={1}>{userMajor}</ThemedText>
             </View>
