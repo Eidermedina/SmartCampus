@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { API_URL } from '@/constants/Config';
 import { useRole } from './useRole';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export type ReservationStatus = 'REVISIÓN' | 'CONFIRMADA' | 'CANCELADA' | 'EN ESPERA';
 
@@ -60,6 +61,8 @@ export function ReservationProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [userId, role]);
 
+  const token = useAuthStore(state => state.token);
+
   const addReservation = async (newRes: any) => {
     try {
       const formData = new FormData();
@@ -73,7 +76,11 @@ export function ReservationProvider({ children }: { children: ReactNode }) {
       if (newRes.priority) formData.append('priority', newRes.priority);
       if (newRes.details) formData.append('details', newRes.details);
 
-      const res = await fetch(`${API_URL}/reservations/`, { method: 'POST', body: formData });
+      const res = await fetch(`${API_URL}/reservations/`, { 
+        method: 'POST', 
+        body: formData,
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || 'Error al crear la reserva');
@@ -87,7 +94,10 @@ export function ReservationProvider({ children }: { children: ReactNode }) {
 
   const updateStatus = async (id: string, status: ReservationStatus) => {
     try {
-      await fetch(`${API_URL}/reservations/${id}?status=${status}`, { method: 'PUT' });
+      await fetch(`${API_URL}/reservations/${id}?status=${status}`, { 
+        method: 'PUT',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       refreshReservations();
     } catch (error) {
       console.error('Error updating status:', error);
@@ -96,7 +106,10 @@ export function ReservationProvider({ children }: { children: ReactNode }) {
 
   const deleteReservation = async (id: string) => {
     try {
-      await fetch(`${API_URL}/reservations/${id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/reservations/${id}`, { 
+        method: 'DELETE',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       refreshReservations();
     } catch (error) {
       console.error('Error deleting reservation:', error);
