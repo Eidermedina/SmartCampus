@@ -97,12 +97,17 @@ export default function ReservationDetailScreen() {
       Alert.alert('Error', 'Ingresa un correo electrónico válido');
       return;
     }
+    if (!reservation?.group_id) {
+      Alert.alert('Error', 'No se encontró un grupo activo para esta reserva.');
+      return;
+    }
     try {
       const formData = new FormData();
       formData.append('creator_id', userId!);
-      formData.append('creator_name', reservation.user_name);
-      formData.append('group_name', reservation.group_name);
-      formData.append('invited_email', inviteEmail.trim());
+      formData.append('creator_name', reservation.user_name || '');
+      formData.append('group_name', reservation.group_name || '');
+      formData.append('group_id', String(reservation.group_id));
+      formData.append('invited_email', inviteEmail.trim().toLowerCase());
       
       const res = await fetch(`${API_URL}/study-groups/invite`, {
         method: 'POST',
@@ -110,15 +115,15 @@ export default function ReservationDetailScreen() {
       });
       const data = await res.json();
       if (!res.ok) {
-        Alert.alert('Error', data.detail || 'Ocurrió un error al enviar la invitación');
+        Alert.alert('Error al invitar', data.detail || `Error ${res.status}: No se pudo enviar la invitación`);
       } else {
-        Alert.alert('Éxito', 'Invitación enviada correctamente');
+        Alert.alert('✅ Invitación enviada', 'El usuario recibirá una notificación para unirse al grupo.');
         setInviteModalVisible(false);
         setInviteEmail('');
       }
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'No se pudo enviar la invitación');
+    } catch (error: any) {
+      console.error('Invite error:', error);
+      Alert.alert('Error de red', 'No se pudo conectar con el servidor.');
     }
   };
 
