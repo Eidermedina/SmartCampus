@@ -53,7 +53,7 @@ const RequestCard: React.FC<RequestCardProps> = ({ reservation, onApprove, onRej
         </View>
       )}
 
-      {status === 'REVISIÓN' && (
+      {status === 'PENDIENTE' && (
         <View style={styles.cardActions}>
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.primary }]} onPress={onApprove}>
             <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
@@ -66,7 +66,7 @@ const RequestCard: React.FC<RequestCardProps> = ({ reservation, onApprove, onRej
         </View>
       )}
 
-      {status !== 'REVISIÓN' && (
+      {status !== 'PENDIENTE' && (
         <View style={[styles.statusIndicator, { backgroundColor: status === 'CONFIRMADA' ? `${colors.success}15` : `${colors.error}15` }]}>
           <ThemedText style={{ color: status === 'CONFIRMADA' ? colors.success : colors.error, fontWeight: '900', fontSize: 12 }}>
             {status}
@@ -84,10 +84,10 @@ export default function RequestsScreen() {
   const isLight = colorScheme === 'light';
   const [activeFilter, setActiveFilter] = useState('Pendientes');
 
-  const pendingCount = reservations.filter(r => r.status === 'REVISIÓN').length;
+  const pendingCount = reservations.filter(r => r.status === 'PENDIENTE').length;
 
   const filteredReservations = reservations.filter(r => {
-    if (activeFilter === 'Pendientes') return r.status === 'REVISIÓN';
+    if (activeFilter === 'Pendientes') return r.status === 'PENDIENTE';
     if (activeFilter === 'Aprobadas') return r.status === 'CONFIRMADA';
     if (activeFilter === 'Rechazadas') return r.status === 'CANCELADA'; // 'CANCELADA' se usa como rechazo
     return true;

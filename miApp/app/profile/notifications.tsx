@@ -42,7 +42,7 @@ export default function NotificationsScreen() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { userName, userId } = useRole();
-  const { notifications, markAsRead, deleteNotification } = useNotifications();
+  const { notifications, markAsRead, deleteNotification, declineInvitation, acceptInvitation } = useNotifications();
   const [selectedNoti, setSelectedNoti] = React.useState<Notification | null>(null);
 
   const recent = notifications.filter(n => !n.isRead);
@@ -70,9 +70,9 @@ export default function NotificationsScreen() {
                   title={noti.title} 
                   message={noti.description}
                   time={noti.time}
-                  category={noti.type.startsWith('invite_group') ? 'INVITACIÓN' : noti.type.toUpperCase()}
-                  icon={noti.type === 'success' ? 'checkmark-circle' : noti.type === 'alert' ? 'warning' : noti.type.startsWith('invite_group') ? 'people-circle' : 'information-circle'}
-                  color={noti.type === 'success' ? '#32D74B' : noti.type === 'alert' ? '#FFD60A' : noti.type.startsWith('invite_group') ? '#BF5AF2' : '#0A84FF'}
+                  category={noti.type?.startsWith('invite_group') ? 'INVITACIÓN' : noti.type?.toUpperCase() || 'INFO'}
+                  icon={noti.type === 'success' ? 'checkmark-circle' : noti.type === 'alert' ? 'warning' : noti.type?.startsWith('invite_group') ? 'people-circle' : 'information-circle'}
+                  color={noti.type === 'success' ? '#32D74B' : noti.type === 'alert' ? '#FFD60A' : noti.type?.startsWith('invite_group') ? '#BF5AF2' : '#0A84FF'}
                 />
               </TouchableOpacity>
             ))}
@@ -88,8 +88,8 @@ export default function NotificationsScreen() {
                   title={noti.title} 
                   message={noti.description}
                   time={noti.time}
-                  category={noti.type.startsWith('invite_group') ? 'INVITACIÓN' : noti.type.toUpperCase()}
-                  icon={noti.type === 'success' ? 'checkmark-circle' : noti.type === 'alert' ? 'warning' : noti.type.startsWith('invite_group') ? 'people-circle' : 'information-circle'}
+                  category={noti.type?.startsWith('invite_group') ? 'INVITACIÓN' : noti.type?.toUpperCase() || 'INFO'}
+                  icon={noti.type === 'success' ? 'checkmark-circle' : noti.type === 'alert' ? 'warning' : noti.type?.startsWith('invite_group') ? 'people-circle' : 'information-circle'}
                   color="#8E8E93"
                   isPast
                 />
@@ -132,30 +132,18 @@ export default function NotificationsScreen() {
                 <ThemedText style={styles.modalDesc}>{selectedNoti.description}</ThemedText>
                 
                 <View style={styles.modalActions}>
-                  {selectedNoti.type.startsWith('invite_group:') ? (
+                  {selectedNoti.type?.startsWith('invite_group:') ? (
                     <>
                       <TouchableOpacity 
                         style={[styles.modalBtn, { backgroundColor: '#32D74B' }]}
                         onPress={async () => {
-                          try {
-                            const groupId = selectedNoti.type.split(':')[1];
-                            const formData = new FormData();
-                            formData.append('user_id', userId);
-                            formData.append('group_id', groupId);
-                            formData.append('notification_id', selectedNoti.id);
-                            const res = await fetch(`${API_URL}/study-groups/accept-invitation`, {
-                              method: 'POST',
-                              body: formData
-                            });
-                            if (res.ok) {
-                              Alert.alert('¡Aceptado!', 'Te has unido al grupo de estudio.');
-                              deleteNotification(selectedNoti.id);
-                              setSelectedNoti(null);
-                            } else {
-                              Alert.alert('Error', 'No se pudo aceptar la invitación.');
-                            }
-                          } catch (err) {
-                            Alert.alert('Error', 'Error de red.');
+                          const groupId = selectedNoti.type?.split(':')[1] || '';
+                          setSelectedNoti(null); // Close modal instantly so they can't click again
+                          const ok = await acceptInvitation(selectedNoti.id, groupId);
+                          if (ok) {
+                            Alert.alert('¡Aceptado!', 'Te has unido al grupo de estudio.');
+                          } else {
+                            Alert.alert('Error', 'No se pudo aceptar la invitación.');
                           }
                         }}
                       >
@@ -163,8 +151,9 @@ export default function NotificationsScreen() {
                       </TouchableOpacity>
                       <TouchableOpacity 
                         style={[styles.modalBtn, { backgroundColor: '#FF453A' }]}
-                        onPress={() => {
-                          deleteNotification(selectedNoti.id);
+                        onPress={async () => {
+                          const groupId = selectedNoti.type?.split(':')[1] || '';
+                          await declineInvitation(selectedNoti.id, groupId);
                           setSelectedNoti(null);
                         }}
                       >

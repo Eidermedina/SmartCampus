@@ -6,7 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useRole } from '@/hooks/useRole';
-
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export const TopNav: React.FC = () => {
@@ -50,9 +50,11 @@ export const TopNav: React.FC = () => {
     <View style={styles.content}>
       <View style={styles.topBarLeft}>
         <TouchableOpacity onPress={() => router.replace('/(tabs)')} activeOpacity={0.7}>
-          <View style={[styles.campusLogo, { backgroundColor: isLight ? '#FFF' : colors.primary }]}>
-            <Ionicons name="business" size={20} color={isLight ? colors.primary : "#FFF"} />
-          </View>
+          <Image
+            source={require('@/assets/images/icon-v2.png')}
+            style={styles.campusLogo}
+            contentFit="contain"
+          />
         </TouchableOpacity>
         <ThemedText style={[styles.topBarTitle, { color: isLight ? '#FFF' : colors.primary }]}>SmartCampus</ThemedText>
       </View>

@@ -76,7 +76,7 @@ const SpaceItem = ({ title, capacity, category, status, imageUrl, onPress, isAct
             <ThemedText style={styles.spaceTitle} numberOfLines={1}>{title}</ThemedText>
           </View>
           <ThemedText style={styles.spaceCapacity} numberOfLines={1}>
-            Capacidad: {capacity} • {isActive === false ? 'BLOQUEADO' : status.toUpperCase()}
+            Capacidad: {capacity} • {isActive === false ? 'Bloqueado' : (status === 'available' ? 'Disponible' : 'Deshabilitado')}
           </ThemedText>
         </View>
       </View>
@@ -178,6 +178,8 @@ const AdminSpaceCard: React.FC<{
 const AdminSpacesScreen = () => {
   const { spaces, toggleSpaceActive, isLoaded } = useCampus();
   const [activeFilter, setActiveFilter] = useState('Todas las Áreas');
+  const [adminSelectedBlock, setAdminSelectedBlock] = useState('Bloque A');
+  const [adminSelectedFloor, setAdminSelectedFloor] = useState(1);
   const router = useRouter();
 
   if (!isLoaded) return <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ThemedText>Cargando panel...</ThemedText></ThemedView>;
@@ -238,8 +240,18 @@ const AdminSpacesScreen = () => {
       'Salones': 'salones',
       'Canchas': 'canchas'
     };
-    return s.category === catMap[activeFilter];
+    if (s.category !== catMap[activeFilter]) return false;
+    if (activeFilter === 'Salones') {
+      if (s.block !== adminSelectedBlock) return false;
+      if (adminSelectedBlock === 'Bloque D' && s.floor !== adminSelectedFloor) return false;
+    }
+    return true;
   });
+
+  const adminBlocks = Array.from(new Set(spaces.filter(s => s.category === 'salones').map(s => s.block)));
+  const adminFloors = Array.from(new Set(
+    spaces.filter(s => s.category === 'salones' && s.block === adminSelectedBlock && s.floor !== undefined).map(s => s.floor)
+  )).sort((a: any, b: any) => a - b) as number[];
 
   return (
     <ThemedView style={styles.container}>
@@ -255,6 +267,34 @@ const AdminSpacesScreen = () => {
             </View>
           </View>
           {renderFilters()}
+          {activeFilter === 'Salones' && (
+            <View style={styles.subFiltersContainer}>
+              <View style={styles.modalSubFilterRow}>
+                {adminBlocks.map(b => (
+                  <TouchableOpacity
+                    key={b}
+                    onPress={() => { setAdminSelectedBlock(b); setAdminSelectedFloor(1); }}
+                    style={[styles.modalSubBtn, adminSelectedBlock === b && { borderColor: colors.primary }]}
+                  >
+                    <ThemedText style={[styles.modalSubText, adminSelectedBlock === b && { color: colors.primary }]}>{b}</ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {adminSelectedBlock === 'Bloque D' && adminFloors.length > 0 && (
+                <View style={[styles.modalSubFilterRow, { marginTop: 12 }]}>
+                  {adminFloors.map(floor => (
+                    <TouchableOpacity
+                      key={floor}
+                      onPress={() => setAdminSelectedFloor(floor)}
+                      style={[styles.modalSubBtn, adminSelectedFloor === floor && { borderColor: colors.primary }]}
+                    >
+                      <ThemedText style={[styles.modalSubText, adminSelectedFloor === floor && { color: colors.primary }]}>Piso {floor}</ThemedText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
           <View style={styles.adminList}>
             {filteredSpaces.map(s => (
               <TouchableOpacity key={s.id} onPress={() => router.push(`/spaces/${s.id}`)}>

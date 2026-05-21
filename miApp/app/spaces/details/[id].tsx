@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '@/constants/Config';
 import { useReservations } from '@/hooks/useReservations';
 import { TopNav } from '@/components/smart-campus/TopNav';
+import { useRole } from '@/hooks/useRole';
 
 export default function ReservationDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -16,14 +17,22 @@ export default function ReservationDetailScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const { updateStatus } = useReservations();
+  const { userId, role } = useRole();
   const [reservation, setReservation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const [isEditingGroup, setIsEditingGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
 
   const fetchDetails = async () => {
     try {
       const res = await fetch(`${API_URL}/reservations/${id}`);
       const data = await res.json();
       setReservation(data);
+      if (data.group_name) setNewGroupName(data.group_name);
     } catch (e) {
       console.error(e);
     } finally {
@@ -38,6 +47,79 @@ export default function ReservationDetailScreen() {
   const handleAction = async (status: 'CONFIRMADA' | 'CANCELADA') => {
     await updateStatus(id as string, status as any);
     router.back();
+  };
+
+  const isCreator = userId === String(reservation?.user_id);
+
+  const handleEditGroup = async () => {
+    if (isEditingGroup) {
+      if (!newGroupName.trim()) {
+        Alert.alert('Error', 'El nombre del grupo no puede estar vacío');
+        return;
+      }
+      try {
+        const formData = new FormData();
+        formData.append('name', newGroupName.trim());
+        const res = await fetch(`${API_URL}/study-groups/${reservation.group_id}`, {
+          method: 'PUT',
+          body: formData,
+        });
+        if (res.ok) {
+          setReservation({ ...reservation, group_name: newGroupName.trim() });
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    setIsEditingGroup(!isEditingGroup);
+  };
+
+  const handleRemoveMember = async (memberUserId: string) => {
+    Alert.alert('Confirmar', '¿Estás seguro de que deseas eliminar a este integrante del grupo?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: async () => {
+        try {
+          const res = await fetch(`${API_URL}/study-groups/${reservation.group_id}/members/${memberUserId}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            fetchDetails();
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }}
+    ]);
+  };
+
+  const handleInviteMember = async () => {
+    if (!inviteEmail.trim()) {
+      Alert.alert('Error', 'Ingresa un correo electrónico válido');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      formData.append('creator_id', userId!);
+      formData.append('creator_name', reservation.user_name);
+      formData.append('group_name', reservation.group_name);
+      formData.append('invited_email', inviteEmail.trim());
+      
+      const res = await fetch(`${API_URL}/study-groups/invite`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        Alert.alert('Error', data.detail || 'Ocurrió un error al enviar la invitación');
+      } else {
+        Alert.alert('Éxito', 'Invitación enviada correctamente');
+        setInviteModalVisible(false);
+        setInviteEmail('');
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'No se pudo enviar la invitación');
+    }
   };
 
   if (loading) {
@@ -88,19 +170,48 @@ export default function ReservationDetailScreen() {
         {/* Group Info (If applicable) */}
         {reservation.group_name && (
           <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="people-outline" size={24} color={colors.primary} />
-              <ThemedText style={styles.sectionTitle}>Grupo: {reservation.group_name}</ThemedText>
+            <View style={[styles.sectionHeader, { justifyContent: 'space-between' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                <Ionicons name="people-outline" size={24} color={colors.primary} />
+                {isCreator && isEditingGroup ? (
+                  <TextInput
+                    style={[styles.editGroupInput, { color: colors.text, borderColor: colors.border }]}
+                    value={newGroupName}
+                    onChangeText={setNewGroupName}
+                    autoFocus
+                  />
+                ) : (
+                  <ThemedText style={[styles.sectionTitle, { flex: 1 }]} numberOfLines={1}>Grupo: {reservation.group_name}</ThemedText>
+                )}
+              </View>
+              {isCreator && (
+                <TouchableOpacity onPress={handleEditGroup} style={styles.editBtn}>
+                  <Ionicons name={isEditingGroup ? "checkmark" : "pencil"} size={20} color={colors.primary} />
+                </TouchableOpacity>
+              )}
             </View>
             <View style={styles.membersList}>
               {reservation.members?.map((member: any, idx: number) => (
-                <View key={idx} style={styles.memberRow}>
-                  <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-                  <ThemedText style={styles.memberName}>{member.name}</ThemedText>
-                  <ThemedText style={styles.memberMajor}> - {member.major}</ThemedText>
+                <View key={idx} style={[styles.memberRow, { justifyContent: 'space-between' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+                    <ThemedText style={styles.memberName}>{member.name}</ThemedText>
+                    <ThemedText style={styles.memberMajor}> - {member.major || 'Invitado'}</ThemedText>
+                  </View>
+                  {isCreator && String(member.user_id) !== userId && (
+                    <TouchableOpacity onPress={() => handleRemoveMember(member.user_id)} style={styles.removeBtn}>
+                      <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                    </TouchableOpacity>
+                  )}
                 </View>
               ))}
             </View>
+            {isCreator && (
+              <TouchableOpacity style={styles.addMemberBtn} onPress={() => setInviteModalVisible(true)}>
+                <Ionicons name="person-add-outline" size={16} color={colors.primary} />
+                <ThemedText style={[styles.addMemberText, { color: colors.primary }]}>Agregar integrante</ThemedText>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -132,7 +243,7 @@ export default function ReservationDetailScreen() {
         </View>
 
         {/* Admin Actions */}
-        {reservation.status === 'REVISIÓN' && (
+        {role === 'admin' && reservation.status === 'PENDIENTE' && (
           <View style={styles.actionsContainer}>
             <TouchableOpacity 
               style={[styles.actionBtn, { backgroundColor: '#34C759' }]} 
@@ -154,6 +265,38 @@ export default function ReservationDetailScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Invite Modal */}
+      <Modal visible={inviteModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <ThemedText style={styles.modalTitle}>Invitar Integrante</ThemedText>
+              <TouchableOpacity onPress={() => setInviteModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ThemedText style={[styles.modalSubtitle, { color: '#8E8E93' }]}>
+              Ingresa el correo electrónico del usuario que deseas agregar al grupo de estudio.
+            </ThemedText>
+            <TextInput
+              style={[styles.modalInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+              placeholder="correo@ejemplo.com"
+              placeholderTextColor="#8E8E93"
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TouchableOpacity 
+              style={[styles.actionBtn, { backgroundColor: colors.primary, height: 50, borderRadius: 12, marginTop: 16 }]} 
+              onPress={handleInviteMember}
+            >
+              <ThemedText style={[styles.actionBtnText, { color: '#000', fontSize: 14 }]}>ENVIAR INVITACIÓN</ThemedText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -203,4 +346,69 @@ const styles = StyleSheet.create({
     gap: 12 
   },
   actionBtnText: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 0.5 },
+  editGroupInput: {
+    flex: 1,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  editBtn: {
+    padding: 6,
+  },
+  removeBtn: {
+    padding: 6,
+  },
+  addMemberBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    gap: 8,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 0, 0.3)',
+    borderRadius: 12,
+    borderStyle: 'dashed',
+  },
+  addMemberText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingBottom: 48,
+    borderWidth: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  modalInput: {
+    height: 52,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+  },
 });

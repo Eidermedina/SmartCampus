@@ -177,7 +177,7 @@ export default function ReportsScreen() {
         <View style={[styles.ctaCard, { backgroundColor: colors.primary }]}>
            <ThemedText style={styles.ctaTitle}>¿Nueva Incidencia?</ThemedText>
            <ThemedText style={styles.ctaSub}>Ayúdanos a mantener el campus en perfectas condiciones.</ThemedText>
-           <TouchableOpacity style={[styles.ctaBtn, { backgroundColor: colors.accent }]}>
+           <TouchableOpacity style={[styles.ctaBtn, { backgroundColor: colors.accent }]} onPress={() => router.push('/(tabs)/reports' as any)}>
               <ThemedText style={[styles.ctaBtnText, { color: isLight ? '#FFF' : '#000' }]}>CREAR REPORTE</ThemedText>
            </TouchableOpacity>
         </View>

@@ -3,7 +3,7 @@ import { API_URL } from '@/constants/Config';
 import { useRole } from './useRole';
 import { useAuthStore } from '@/store/useAuthStore';
 
-export type ReservationStatus = 'REVISIÓN' | 'CONFIRMADA' | 'CANCELADA' | 'EN ESPERA';
+export type ReservationStatus = 'PENDIENTE' | 'CONFIRMADA' | 'CANCELADA' | 'EN ESPERA';
 
 export interface Reservation {
   id: string;
@@ -70,7 +70,7 @@ export function ReservationProvider({ children }: { children: ReactNode }) {
       formData.append('space_id', newRes.spaceId);
       formData.append('start_time', newRes.startTime || new Date().toISOString());
       formData.append('end_time', newRes.endTime || new Date().toISOString());
-      formData.append('status', 'REVISIÓN');
+      formData.append('status', 'PENDIENTE');
       if (newRes.groupId) formData.append('group_id', newRes.groupId);
       if (newRes.type) formData.append('type', newRes.type);
       if (newRes.priority) formData.append('priority', newRes.priority);

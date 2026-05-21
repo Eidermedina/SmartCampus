@@ -36,22 +36,7 @@ export default function SpaceDetailScreen() {
 
   const currentRealDate = getRealDate();
 
-  if (!isLoaded) return <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ThemedText>Cargando detalles...</ThemedText></ThemedView>;
-
-  const space = spaces.find(s => s.id === id);
-
-  if (!space) {
-    return (
-      <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-        <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
-        <ThemedText style={{ fontSize: 20, fontWeight: '900', marginTop: 16 }}>Espacio no encontrado</ThemedText>
-        <TouchableOpacity style={{ marginTop: 24, padding: 16, backgroundColor: colors.primary, borderRadius: 12 }} onPress={() => router.back()}>
-          <ThemedText style={{ color: '#FFF', fontWeight: '800' }}>Volver atrás</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
-    );
-  }
-
+  // ── All state declarations MUST come before any conditional returns ──
   const [selectedTimes, setSelectedTimes] = useState<string[]>([]);
   const [groupName, setGroupName] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -63,35 +48,32 @@ export default function SpaceDetailScreen() {
   const [currentSchedule, setCurrentSchedule] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [spaceActive, setSpaceActive] = useState(true);
+  const [spaceReservations, setSpaceReservations] = useState<{start: string, end: string}[]>([]);
+
+  // Resolve space here (may be undefined before isLoaded)
+  const space = spaces.find(s => s.id === id);
 
   const fetchMembers = async () => {
     if (!currentGroupId) return;
     try {
       const res = await fetch(`${API_URL}/study-groups/${currentGroupId}/members`);
       const data = await res.json();
-      // Data might be like [{user_id: ..., name: ...}, ...]
-      // We need names. Let's assume the backend returns user names too.
-      // Wait, let's check the backend routes_study_groups.py line 39.
-      // It returns SELECT * FROM group_members. We might need a JOIN.
       setRealMembers(data);
     } catch (err) {
       console.error("Error fetching members:", err);
     }
   };
 
-  const [spaceReservations, setSpaceReservations] = useState<{start: string, end: string}[]>([]);
-
+  // ── All useEffect calls MUST come before any conditional returns ──
   React.useEffect(() => {
     const fetchReservations = async () => {
       try {
         const res = await fetch(`${API_URL}/reservations/`);
         const data = await res.json();
-        
-        const activeRes = data.filter((r: any) => 
-          r.space_id.toString() === id && 
-          (r.status === 'REVISIÓN' || r.status === 'CONFIRMADA')
+        const activeRes = data.filter((r: any) =>
+          r.space_id.toString() === id &&
+          (r.status === 'PENDIENTE' || r.status === 'CONFIRMADA')
         );
-        
         const mapped = activeRes.map((r: any) => ({
           start: r.start_time.substring(11, 16),
           end: r.end_time.substring(11, 16)
@@ -110,7 +92,6 @@ export default function SpaceDetailScreen() {
         console.error("Error fetching admin schedules:", e);
       }
     };
-
     fetchReservations();
     fetchAdminSchedules();
     const intv = setInterval(() => {
@@ -126,6 +107,29 @@ export default function SpaceDetailScreen() {
     }
   }, [space]);
 
+  React.useEffect(() => {
+    if (currentGroupId) {
+      fetchMembers();
+      const interval = setInterval(fetchMembers, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [currentGroupId]);
+
+  // ── Conditional returns AFTER all hooks ──
+  if (!isLoaded) return <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ThemedText>Cargando detalles...</ThemedText></ThemedView>;
+
+  if (!space) {
+    return (
+      <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
+        <ThemedText style={{ fontSize: 20, fontWeight: '900', marginTop: 16 }}>Espacio no encontrado</ThemedText>
+        <TouchableOpacity style={{ marginTop: 24, padding: 16, backgroundColor: colors.primary, borderRadius: 12 }} onPress={() => router.back()}>
+          <ThemedText style={{ color: '#FFF', fontWeight: '800' }}>Volver atrás</ThemedText>
+        </TouchableOpacity>
+      </ThemedView>
+    );
+  }
+
   if (role !== 'admin' && !spaceActive) {
     return (
       <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
@@ -139,13 +143,6 @@ export default function SpaceDetailScreen() {
     );
   }
 
-  React.useEffect(() => {
-    if (currentGroupId) {
-      fetchMembers();
-      const interval = setInterval(fetchMembers, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [currentGroupId]);
 
   const isTimeSlotPast = (time: string) => {
     if (time === '05:00 - 06:00') return false; // Testing slot is never past
@@ -159,12 +156,11 @@ export default function SpaceDetailScreen() {
     return (reservationTime.getTime() - now.getTime()) < (30 * 60 * 1000);
   };
 
-  const getAvailableSlots = () => {
+  const getAllSlotsWithStatus = (): { time: string; status: 'available' | 'blocked_schedule' | 'blocked_reservation' | 'past' }[] => {
     const now = new Date();
-    let jsDay = now.getDay();
-    let dbDay = jsDay === 0 ? 6 : jsDay - 1;
+    const jsDay = now.getDay();
+    const dbDay = jsDay === 0 ? 6 : jsDay - 1;
 
-    // 1. Hardcoded full range from 7 AM to 10 PM
     const allHours = [
       '07:00 - 08:00', '08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00',
       '11:00 - 12:00', '12:00 - 13:00', '13:00 - 14:00', '14:00 - 15:00',
@@ -172,35 +168,34 @@ export default function SpaceDetailScreen() {
       '19:00 - 20:00', '20:00 - 21:00', '21:00 - 22:00'
     ];
 
-    // 2. Filter slots
-    return allHours.filter(time => {
+    return allHours.map(time => {
       const [startH] = time.split(' - ')[0].split(':').map(Number);
       const slotStart = startH;
-      
-      // Rule: Not in the past (with 30 min buffer)
+
+      // Check if past (less than 30 min ahead)
       const reservationTime = new Date();
       reservationTime.setHours(startH, 0, 0, 0);
       const isPast = (reservationTime.getTime() - now.getTime()) < (30 * 60 * 1000);
-      if (isPast) return false;
+      if (isPast) return { time, status: 'past' as const };
 
-      // Rule: Must NOT overlap with any ACTIVE and BLOCKED (not free) admin schedule
-      const isBlockedByAdmin = adminSchedules.some(s => {
+      // Check if blocked by admin schedule (not free, active, matching day)
+      const isBlockedByAdmin = adminSchedules.some((s: any) => {
         if (s.day_of_week !== dbDay || !s.is_active || s.is_free) return false;
         const [h] = s.start_time.split(':').map(Number);
         const [eh] = s.end_time.split(':').map(Number);
         return slotStart >= h && slotStart < eh;
       });
-      if (isBlockedByAdmin) return false;
+      if (isBlockedByAdmin) return { time, status: 'blocked_schedule' as const };
 
-      // Rule: Not occupied by confirmed reservation
-      for (const res of spaceReservations) {
-        const [rHStr] = res.start.split(':');
-        const resStart = parseInt(rHStr, 10);
-        const [eHStr] = res.end.split(':');
-        const resEnd = parseInt(eHStr, 10);
-        if (slotStart >= resStart && slotStart < resEnd) return false;
-      }
-      return true;
+      // Check if occupied by confirmed/pending reservation
+      const isReserved = spaceReservations.some(res => {
+        const resStart = parseInt(res.start.split(':')[0], 10);
+        const resEnd = parseInt(res.end.split(':')[0], 10);
+        return slotStart >= resStart && slotStart < resEnd;
+      });
+      if (isReserved) return { time, status: 'blocked_reservation' as const };
+
+      return { time, status: 'available' as const };
     });
   };
 
@@ -732,34 +727,87 @@ export default function SpaceDetailScreen() {
           <ThemedText style={styles.sectionDate}>{currentRealDate}</ThemedText>
         </View>
 
+        {/* Color Legend */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 16, paddingHorizontal: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary }} />
+            <ThemedText style={{ fontSize: 11, color: colors.muted }}>Disponible</ThemedText>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error }} />
+            <ThemedText style={{ fontSize: 11, color: colors.muted }}>Clase / Reservado</ThemedText>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.muted }} />
+            <ThemedText style={{ fontSize: 11, color: colors.muted }}>Pasado</ThemedText>
+          </View>
+        </View>
+
         <View style={styles.timeGrid}>
-          {getAvailableSlots().map((time) => {
+          {getAllSlotsWithStatus().map(({ time, status }) => {
             const isSelected = selectedTimes.includes(time);
-            
+            const isBlocked = status === 'blocked_schedule' || status === 'blocked_reservation';
+            const isPast = status === 'past';
+            const isAvailable = status === 'available';
+            const blockLabel = status === 'blocked_schedule' ? 'Clase' : status === 'blocked_reservation' ? 'Reservado' : '';
+
             return (
               <TouchableOpacity
                 key={time}
-                activeOpacity={0.7}
-                onPress={() => toggleTime(time, false)}
+                activeOpacity={isAvailable ? 0.7 : 1}
+                onPress={() => {
+                  if (isAvailable) toggleTime(time, false);
+                }}
                 style={[
                   styles.timeChip,
                   {
-                    backgroundColor: isSelected ? colors.primary : colors.card,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    borderWidth: 1,
+                    backgroundColor: isSelected
+                      ? colors.primary
+                      : isBlocked
+                        ? 'rgba(255,69,58,0.12)'
+                        : isPast
+                          ? 'rgba(142,142,147,0.08)'
+                          : colors.card,
+                    borderColor: isSelected
+                      ? colors.primary
+                      : isBlocked
+                        ? colors.error
+                        : isPast
+                          ? colors.muted
+                          : colors.border,
+                    borderWidth: isBlocked ? 1.5 : 1,
+                    opacity: isPast ? 0.45 : 1,
                   }
                 ]}
               >
-                <ThemedText style={[styles.timeText, isSelected && { color: '#FFF' }]}>{time}</ThemedText>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={[
+                    styles.timeText,
+                    isSelected && { color: '#FFF' },
+                    isBlocked && { color: colors.error, fontWeight: '800' },
+                    isPast && { color: colors.muted },
+                  ]}>
+                    {time}
+                  </ThemedText>
+                  {isBlocked && blockLabel ? (
+                    <ThemedText style={{ fontSize: 9, color: colors.error, fontWeight: '700', marginTop: 2 }}>
+                      {blockLabel.toUpperCase()}
+                    </ThemedText>
+                  ) : null}
+                </View>
                 {isSelected ? (
                   <Ionicons name="checkmark-circle" size={16} color="#FFF" />
+                ) : isBlocked ? (
+                  <Ionicons name="close-circle" size={16} color={colors.error} />
+                ) : isPast ? (
+                  <Ionicons name="time-outline" size={16} color={colors.muted} />
                 ) : (
                   <Ionicons name="time-outline" size={16} color={colors.primary} />
                 )}
               </TouchableOpacity>
             );
           })}
-          {getAvailableSlots().length === 0 && (
+          {getAllSlotsWithStatus().filter(s => s.status === 'available').length === 0 && (
             <View style={{ width: '100%', padding: 20, alignItems: 'center', backgroundColor: colors.card, borderRadius: 20 }}>
               <Ionicons name="calendar-outline" size={40} color={colors.muted} />
               <ThemedText style={{ color: colors.muted, marginTop: 12, textAlign: 'center' }}>
@@ -768,6 +816,7 @@ export default function SpaceDetailScreen() {
             </View>
           )}
         </View>
+
 
         {/* Study Group */}
         <ThemedText style={styles.sectionLabelSmall}>DETALLE DE GRUPO DE ESTUDIO</ThemedText>

@@ -4,7 +4,7 @@ import { API_URL } from '@/constants/Config';
 import { useRole } from './useRole';
 
 export type SpaceStatus = 'available' | 'occupied' | 'maintenance';
-export type ReservationStatus = 'REVISIÓN' | 'CONFIRMADA' | 'EN ESPERA' | 'RECHAZADA';
+export type ReservationStatus = 'PENDIENTE' | 'CONFIRMADA' | 'EN ESPERA' | 'RECHAZADA';
 export type ReportStatus = 'PENDIENTE' | 'EN PROCESO' | 'RESUELTO';
 export type ReportPriority = 'Baja' | 'Media' | 'Alta';
 
