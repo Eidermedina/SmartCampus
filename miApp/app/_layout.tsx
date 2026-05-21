@@ -1,7 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
 import { useState, useEffect } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,6 +19,9 @@ import { Splash } from '@/components/Splash';
 import { Intro } from '@/components/smart-campus/Intro';
 import { Auth } from '@/components/smart-campus/Auth';
 import { useAuthStore } from '@/store/useAuthStore';
+
+// Suppress the "Reduced motion" dev warning — device accessibility setting, not a code issue
+configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
 
 export const unstable_settings = {
   anchor: '(tabs)',

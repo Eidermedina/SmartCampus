@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity, TextInput, Image, Alert, ActivityIndicator, Switch } from 'react-native';
+import { StyleSheet, View, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Switch, Modal, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
@@ -20,15 +20,16 @@ const UserCard = ({ name, id, role, status, email, onToggleStatus, loading }: an
     <View style={[
       styles.userCard,
       { backgroundColor: colors.card, borderColor: colors.border },
-      !isActive && { opacity: 0.6 } // Atenuar si está bloqueado
+      !isActive && { borderColor: colors.error + '40' } // Borde rojo suave si bloqueado
     ]}>
       <View style={styles.userAvatarContainer}>
-        <View style={[styles.userAvatar, { backgroundColor: colors.primary + '20', justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={[styles.userAvatar, { backgroundColor: colors.primary + '20', justifyContent: 'center', alignItems: 'center', opacity: isActive ? 1 : 0.5 }]}>
           <ThemedText style={{ color: colors.primary, fontWeight: '900', fontSize: 24 }}>{name?.charAt(0)}</ThemedText>
         </View>
         <View style={[styles.userStatusDot, { backgroundColor: isActive ? colors.success : colors.error, borderColor: colors.card }]} />
       </View>
-      <View style={styles.userInfo}>
+      {/* Solo la info se atenúa, el switch siempre al 100% */}
+      <View style={[styles.userInfo, !isActive && { opacity: 0.6 }]}>
         <ThemedText style={styles.userNameText}>{name}</ThemedText>
         <ThemedText style={styles.userEmailText}>{email}</ThemedText>
         <View style={styles.userBadgeRow}>
@@ -39,16 +40,16 @@ const UserCard = ({ name, id, role, status, email, onToggleStatus, loading }: an
           </View>
           <View style={styles.statusRow}>
             <View style={[styles.miniDot, { backgroundColor: isActive ? colors.success : colors.error }]} />
-            <ThemedText style={styles.statusLabelText}>{isActive ? 'ACTIVO' : 'BLOQUEADO'}</ThemedText>
+            <ThemedText style={[styles.statusLabelText, !isActive && { color: colors.error, fontWeight: '900' }]}>{isActive ? 'ACTIVO' : 'BLOQUEADO'}</ThemedText>
           </View>
         </View>
       </View>
       <View style={styles.userActions}>
         {!isAdmin && (
           <Switch
-            trackColor={{ false: '#767577', true: colors.success + '80' }}
-            thumbColor={isActive ? colors.success : '#f4f3f4'}
-            ios_backgroundColor="#3e3e3e"
+            trackColor={{ false: colors.error + '60', true: colors.success + '80' }}
+            thumbColor={isActive ? colors.success : colors.error}
+            ios_backgroundColor={colors.error + '40'}
             onValueChange={() => onToggleStatus(id, name, isActive)}
             value={isActive}
             disabled={loading}
@@ -67,6 +68,54 @@ export default function UsersScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isLight = colorScheme === 'light';
+
+  // Create account modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({
+    first_name: '',
+    last_name: '',
+    identification_number: '',
+    email: '',
+    password: '',
+    role: 'student',
+    major: '',
+  });
+
+  const resetForm = () => setForm({ first_name: '', last_name: '', identification_number: '', email: '', password: '', role: 'student', major: '' });
+
+  const handleCreateAccount = async () => {
+    const { first_name, last_name, identification_number, email, password, role, major } = form;
+    if (!first_name || !last_name || !identification_number || !email || !password) {
+      Alert.alert('Campos requeridos', 'Por favor completa todos los campos obligatorios.');
+      return;
+    }
+    setCreating(true);
+    try {
+      const data = new FormData();
+      data.append('first_name', first_name.trim());
+      data.append('last_name', last_name.trim());
+      data.append('identification_number', identification_number.trim());
+      data.append('email', email.trim().toLowerCase());
+      data.append('password', password);
+      data.append('role', role);
+      if (major) data.append('major', major.trim());
+
+      const res = await fetch(`${API_URL}/auth/register`, { method: 'POST', body: data });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.detail || 'Error al crear la cuenta');
+
+      Alert.alert('✅ Cuenta creada', `La cuenta de ${first_name} ${last_name} fue creada exitosamente.`);
+      setShowCreateModal(false);
+      resetForm();
+      fetchUsers();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'No se pudo crear la cuenta.');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const usersRef = React.useRef(users);
   usersRef.current = users;
@@ -223,9 +272,82 @@ export default function UsersScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary, shadowColor: colors.primary }]}>
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
+        onPress={() => setShowCreateModal(true)}
+        activeOpacity={0.85}
+      >
         <Ionicons name="person-add" size={24} color={isLight ? "#FFF" : "#000"} />
       </TouchableOpacity>
+
+      {/* Create Account Modal */}
+      <Modal visible={showCreateModal} transparent animationType="slide" onRequestClose={() => setShowCreateModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <Pressable style={styles.modalOverlay} onPress={() => setShowCreateModal(false)}>
+            <Pressable style={[styles.modalBox, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => {}}>
+              <View style={styles.modalHeader}>
+                <ThemedText style={styles.modalTitle}>Crear Nueva Cuenta</ThemedText>
+                <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 16 }}>
+                {[
+                  { key: 'first_name', label: 'Nombre *', placeholder: 'Ej: Juan' },
+                  { key: 'last_name', label: 'Apellido *', placeholder: 'Ej: Pérez' },
+                  { key: 'identification_number', label: 'N° Identificación *', placeholder: 'Ej: 1234567890' },
+                  { key: 'email', label: 'Correo electrónico *', placeholder: 'usuario@udec.edu.co' },
+                  { key: 'password', label: 'Contraseña *', placeholder: 'Mínimo 6 caracteres' },
+                  { key: 'major', label: 'Carrera / Departamento', placeholder: 'Ej: Ingeniería de Sistemas' },
+                ].map(({ key, label, placeholder }) => (
+                  <View key={key}>
+                    <ThemedText style={styles.formLabel}>{label}</ThemedText>
+                    <TextInput
+                      style={[styles.formInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                      placeholder={placeholder}
+                      placeholderTextColor={colors.muted}
+                      value={(form as any)[key]}
+                      onChangeText={v => setForm(prev => ({ ...prev, [key]: v }))}
+                      secureTextEntry={key === 'password'}
+                      autoCapitalize={key === 'email' ? 'none' : 'words'}
+                      keyboardType={key === 'email' ? 'email-address' : key === 'identification_number' ? 'numeric' : 'default'}
+                    />
+                  </View>
+                ))}
+
+                <View>
+                  <ThemedText style={styles.formLabel}>Rol *</ThemedText>
+                  <View style={styles.roleRow}>
+                    {['student', 'teacher', 'admin'].map(r => (
+                      <TouchableOpacity
+                        key={r}
+                        onPress={() => setForm(prev => ({ ...prev, role: r }))}
+                        style={[styles.roleChip, form.role === r && { backgroundColor: colors.primary }]}
+                      >
+                        <ThemedText style={[styles.roleChipText, form.role === r && { color: '#FFF' }]}>
+                          {r === 'student' ? 'Estudiante' : r === 'teacher' ? 'Docente' : 'Admin'}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.submitBtn, { backgroundColor: colors.primary }, creating && { opacity: 0.6 }]}
+                  onPress={handleCreateAccount}
+                  disabled={creating}
+                >
+                  {creating
+                    ? <ActivityIndicator color="#FFF" />
+                    : <ThemedText style={styles.submitBtnText}>Crear Cuenta</ThemedText>
+                  }
+                </TouchableOpacity>
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </ThemedView>
   );
 }
@@ -263,4 +385,15 @@ const styles = StyleSheet.create({
   userActions: { flexDirection: 'row', gap: 8 },
   actionIconButton: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   fab: { position: 'absolute', bottom: 30, right: 24, width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalBox: { borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, padding: 24, maxHeight: '90%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: '900' },
+  formLabel: { fontSize: 11, fontWeight: '900', color: '#8E8E93', letterSpacing: 0.5, marginBottom: 6 },
+  formInput: { height: 48, borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, fontSize: 15, fontWeight: '600' },
+  roleRow: { flexDirection: 'row', gap: 10 },
+  roleChip: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center', backgroundColor: 'rgba(150,150,150,0.12)' },
+  roleChipText: { fontSize: 13, fontWeight: '800' },
+  submitBtn: { height: 54, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
+  submitBtnText: { fontSize: 16, fontWeight: '900', color: '#FFF' },
 });

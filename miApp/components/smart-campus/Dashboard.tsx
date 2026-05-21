@@ -105,7 +105,7 @@ const AdminDashboard: React.FC = () => {
   const { role, userName } = useRole();
   const { notifications, markAsRead, deleteNotification, acceptInvitation } = useNotifications();
   const [selectedNoti, setSelectedNoti] = React.useState<any>(null);
-  const [selectedReport, setSelectedReport] = React.useState<any>(null);
+  const [viewedReportIds, setViewedReportIds] = React.useState<Set<string>>(new Set());
   const { spaces, reports } = useCampus();
   const { reservations } = useReservations();
   const [users, setUsers] = React.useState<any[]>([]);
@@ -113,6 +113,13 @@ const AdminDashboard: React.FC = () => {
   const colors = Colors[colorScheme];
   const isLight = colorScheme === 'light';
   const router = useRouter();
+
+  const visibleReports = reports.filter(r => !viewedReportIds.has(String(r.id)));
+
+  const handleReportPress = (report: any) => {
+    setViewedReportIds(prev => new Set([...prev, String(report.id)]));
+    router.push('/(tabs)/reports');
+  };
 
   const usersRef = React.useRef(users);
   React.useEffect(() => { usersRef.current = users; }, [users]);
@@ -209,16 +216,19 @@ const AdminDashboard: React.FC = () => {
           {/* Incidents Section */}
           <View style={styles.adminSection}>
             <ThemedText style={styles.adminSectionLabel}>INCIDENCIAS Y REPORTES</ThemedText>
-            {reports.map(report => (
+            {visibleReports.map(report => (
               <TouchableOpacity 
                 key={report.id} 
-                onPress={() => setSelectedReport(report)}
+                onPress={() => handleReportPress(report)}
                 activeOpacity={0.7}
                 style={[styles.alertCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
               >
                 <View style={styles.alertHeader}>
                   <View style={[styles.indicatorDot, { backgroundColor: report.priority === 'Alta' ? colors.error : colors.warning }]} />
                   <ThemedText style={styles.alertTitle}>{report.title}</ThemedText>
+                  <View style={{ marginLeft: 'auto' }}>
+                    <Ionicons name="arrow-forward-circle-outline" size={20} color={colors.primary} />
+                  </View>
                 </View>
                 <ThemedText style={styles.alertDesc} numberOfLines={2}>{report.description}</ThemedText>
                 {report.imageUri && (
@@ -238,7 +248,7 @@ const AdminDashboard: React.FC = () => {
                 </View>
               </TouchableOpacity>
             ))}
-            {reports.length === 0 && <ThemedText style={{ textAlign: 'center', color: colors.muted }}>No hay incidencias reportadas</ThemedText>}
+            {visibleReports.length === 0 && <ThemedText style={{ textAlign: 'center', color: colors.muted }}>No hay incidencias pendientes</ThemedText>}
           </View>
 
 
@@ -321,85 +331,7 @@ const AdminDashboard: React.FC = () => {
         </Pressable>
       </Modal>
 
-      {/* Report Detail Modal for Admin */}
-      <Modal
-        visible={!!selectedReport}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setSelectedReport(null)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setSelectedReport(null)}
-        >
-          <View style={[styles.modalContent, { backgroundColor: colors.card, borderColor: colors.border, maxHeight: '85%' }]}>
-            {selectedReport && (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-                <View style={styles.modalHeader}>
-                  <ThemedText style={styles.modalTitle}>{selectedReport.title}</ThemedText>
-                  <TouchableOpacity onPress={() => setSelectedReport(null)}>
-                    <Ionicons name="close" size={24} color={colors.text} />
-                  </TouchableOpacity>
-                </View>
-                
-                <View style={{ gap: 12, paddingVertical: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={[styles.indicatorDot, { backgroundColor: selectedReport.priority === 'Alta' ? colors.error : colors.warning }]} />
-                    <ThemedText style={{ fontWeight: '800', color: selectedReport.priority === 'Alta' ? colors.error : colors.warning }}>
-                      PRIORIDAD {selectedReport.priority.toUpperCase()}
-                    </ThemedText>
-                  </View>
-
-                  <ThemedText style={[styles.modalTime, { marginBottom: 0 }]}>
-                    Reportado por: {selectedReport.userName}
-                  </ThemedText>
-                  <ThemedText style={[styles.modalTime, { marginTop: 0 }]}>
-                    Ubicación: {selectedReport.space} • {selectedReport.createdAt}
-                  </ThemedText>
-
-                  <ThemedText style={[styles.modalDesc, { fontSize: 16, lineHeight: 24, marginVertical: 10 }]}>
-                    {selectedReport.description}
-                  </ThemedText>
-
-                  {selectedReport.imageUri && (
-                    <>
-                      {selectedReport.imageUri.startsWith('file://') ? (
-                        <View style={{ width: '100%', height: 200, backgroundColor: 'rgba(255,0,0,0.1)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-                          <Ionicons name="cloud-offline-outline" size={40} color={colors.error} />
-                          <ThemedText style={{ color: colors.error, textAlign: 'center', marginTop: 10 }}>
-                            Esta imagen solo es visible en el dispositivo que creó el reporte (Ruta local).
-                          </ThemedText>
-                        </View>
-                      ) : (
-                        <Image 
-                          source={{ uri: selectedReport.imageUri }} 
-                          style={{ width: '100%', height: 300, borderRadius: 20, marginTop: 10 }}
-                          contentFit="contain"
-                          transition={300}
-                          placeholder="|rF?hV%2WCj[ayj[a|j[ayjtOGV@ayofayofayofj[ayj[ayoFayofayofayofayofayofayofayofayofayofayofayof"
-                        />
-                      )}
-                    </>
-                  )}
-
-                  <View style={[styles.tag, { alignSelf: 'flex-start', marginTop: 16, paddingHorizontal: 16, paddingVertical: 8 }]}>
-                    <ThemedText style={[styles.tagText, { fontSize: 14 }]}>{selectedReport.status}</ThemedText>
-                  </View>
-                </View>
-
-                <View style={[styles.modalActions, { marginTop: 20 }]}>
-                  <TouchableOpacity
-                    style={[styles.modalBtn, { backgroundColor: colors.primary, flex: 1 }]}
-                    onPress={() => setSelectedReport(null)}
-                  >
-                    <ThemedText style={[styles.modalBtnText, { color: isLight ? '#FFF' : '#000' }]}>Entendido</ThemedText>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            )}
-          </View>
-        </Pressable>
-      </Modal>
+      {/* Report modal removed — click redirects directly to /(tabs)/reports */}
 
     </View>
   );

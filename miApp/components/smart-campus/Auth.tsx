@@ -38,6 +38,15 @@ export const Auth: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Validation helpers
+  const idIsValid = /^\d+$/.test(identification);
+  const emailIsValid = email.trim().toLowerCase().endsWith('@ucundinamarca.edu.co');
+  const pwdHasUpper = /[A-Z]/.test(password);
+  const pwdHasNumber = /\d/.test(password);
+  const pwdHasSpecial = /[!@#$%^&*(),.?":{}|<>_\-+=/\\\[\]~`]/.test(password);
+  const pwdHasLength = password.length >= 8;
+  const passwordIsValid = pwdHasUpper && pwdHasNumber && pwdHasSpecial && pwdHasLength;
+
   const handleAuth = async () => {
     setError(null);
     setSuccessMessage(null);
@@ -47,6 +56,24 @@ export const Auth: React.FC = () => {
       setError('Por favor completa todos los campos.');
       setIsLoading(false);
       return;
+    }
+
+    if (activeTab === 'register') {
+      if (!idIsValid) {
+        setError('La cédula/TI solo debe contener números.');
+        setIsLoading(false);
+        return;
+      }
+      if (!emailIsValid) {
+        setError('El correo debe terminar en @ucundinamarca.edu.co');
+        setIsLoading(false);
+        return;
+      }
+      if (!passwordIsValid) {
+        setError('La contraseña no cumple los requisitos de seguridad.');
+        setIsLoading(false);
+        return;
+      }
     }
 
     try {
@@ -183,25 +210,31 @@ export const Auth: React.FC = () => {
                   </View>
                   <View style={styles.field}>
                     <ThemedText style={[styles.label, { color: colors.muted }]}>NÚMERO DE IDENTIFICACIÓN</ThemedText>
-                    <View style={[styles.inputGroup, { borderColor: colors.border }]}>
-                      <Ionicons name="card-outline" size={20} color={colors.primary} />
+                    <View style={[styles.inputGroup, { borderColor: identification && !idIsValid ? colors.error : colors.border }]}>
+                      <Ionicons name="card-outline" size={20} color={identification && !idIsValid ? colors.error : colors.primary} />
                       <TextInput
                         style={[styles.input, { color: colors.text }]}
-                        placeholder="Cédula o T.I."
+                        placeholder="Cc o TI"
                         placeholderTextColor={`${colors.text}44`}
                         value={identification}
-                        onChangeText={setIdentification}
+                        onChangeText={v => setIdentification(v.replace(/[^0-9]/g, ''))}
                         keyboardType="numeric"
                       />
+                      {identification.length > 0 && (
+                        <Ionicons name={idIsValid ? 'checkmark-circle' : 'close-circle'} size={18} color={idIsValid ? colors.success : colors.error} />
+                      )}
                     </View>
+                    {identification.length > 0 && !idIsValid && (
+                      <ThemedText style={[styles.fieldHint, { color: colors.error }]}>⚠️ Solo se permiten dígitos</ThemedText>
+                    )}
                   </View>
                 </>
               )}
 
               <View style={styles.field}>
                 <ThemedText style={[styles.label, { color: colors.muted }]}>CORREO ELECTRÓNICO</ThemedText>
-                <View style={[styles.inputGroup, { borderColor: colors.border }]}>
-                  <Ionicons name="mail-outline" size={20} color={colors.primary} />
+                <View style={[styles.inputGroup, { borderColor: activeTab === 'register' && email && !emailIsValid ? colors.error : colors.border }]}>
+                  <Ionicons name="mail-outline" size={20} color={activeTab === 'register' && email && !emailIsValid ? colors.error : colors.primary} />
                   <TextInput
                     style={[styles.input, { color: colors.text }]}
                     placeholder="usuario@ucundinamarca.edu.co"
@@ -211,7 +244,13 @@ export const Auth: React.FC = () => {
                     autoCapitalize="none"
                     keyboardType="email-address"
                   />
+                  {activeTab === 'register' && email.length > 0 && (
+                    <Ionicons name={emailIsValid ? 'checkmark-circle' : 'close-circle'} size={18} color={emailIsValid ? colors.success : colors.error} />
+                  )}
                 </View>
+                {activeTab === 'register' && email.length > 0 && !emailIsValid && (
+                  <ThemedText style={[styles.fieldHint, { color: colors.error }]}>⚠️ Debe terminar en @ucundinamarca.edu.co</ThemedText>
+                )}
               </View>
 
               {activeTab === 'register' && (
@@ -276,11 +315,11 @@ export const Auth: React.FC = () => {
                     </TouchableOpacity>
                   )}
                 </View>
-                <View style={[styles.inputGroup, { borderColor: colors.border }]}>
+                <View style={[styles.inputGroup, { borderColor: activeTab === 'register' && password && !passwordIsValid ? colors.error : colors.border }]}>
                   <Ionicons name="lock-closed-outline" size={20} color={colors.primary} />
                   <TextInput
                     style={[styles.input, { color: colors.text }]}
-                    placeholder="Min. 6 caracteres"
+                    placeholder="Min. 8 caracteres"
                     placeholderTextColor={`${colors.text}44`}
                     value={password}
                     onChangeText={setPassword}
@@ -294,6 +333,21 @@ export const Auth: React.FC = () => {
                     />
                   </TouchableOpacity>
                 </View>
+                {activeTab === 'register' && password.length > 0 && (
+                  <View style={styles.pwdRules}>
+                    {[
+                      { ok: pwdHasLength,  label: 'Mínimo 8 caracteres' },
+                      { ok: pwdHasUpper,   label: 'Al menos una mayúscula' },
+                      { ok: pwdHasNumber,  label: 'Al menos un número' },
+                      { ok: pwdHasSpecial, label: 'Al menos un carácter especial' },
+                    ].map(({ ok, label }) => (
+                      <View key={label} style={styles.pwdRuleRow}>
+                        <Ionicons name={ok ? 'checkmark-circle' : 'ellipse-outline'} size={14} color={ok ? colors.success : colors.muted} />
+                        <ThemedText style={[styles.pwdRuleText, { color: ok ? colors.success : colors.muted }]}>{label}</ThemedText>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
 
               {error && <ThemedText style={styles.errorMsg}>{error}</ThemedText>}
@@ -495,6 +549,25 @@ const styles = StyleSheet.create({
   forgot: {
     fontSize: 10,
     fontWeight: '900',
+  },
+  fieldHint: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  pwdRules: {
+    marginTop: 10,
+    gap: 6,
+  },
+  pwdRuleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pwdRuleText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   inputGroup: {
     flexDirection: 'row',
