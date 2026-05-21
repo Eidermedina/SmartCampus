@@ -106,7 +106,7 @@ const AdminDashboard: React.FC = () => {
   const { notifications, markAsRead, deleteNotification, acceptInvitation } = useNotifications();
   const [selectedNoti, setSelectedNoti] = React.useState<any>(null);
   const [selectedReport, setSelectedReport] = React.useState<any>(null);
-  const { spaces, reports, toggleSpaceStatus } = useCampus();
+  const { spaces, reports } = useCampus();
   const { reservations } = useReservations();
   const [users, setUsers] = React.useState<any[]>([]);
   const colorScheme = useColorScheme() ?? 'light';
@@ -135,7 +135,7 @@ const AdminDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const pendingRequests = reservations.filter(r => r.status === 'REVISIÓN');
+  const pendingRequests = reservations.filter(r => r.status === 'PENDIENTE');
 
   return (
     <View style={styles.adminContainer}>
@@ -204,27 +204,7 @@ const AdminDashboard: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          {/* New Interactive Occupancy Section */}
-          <View style={styles.adminSection}>
-            <View style={styles.sectionHeaderRow}>
-              <ThemedText style={styles.adminSectionLabel}>OCUPACIÓN (CLICK PARA CAMBIAR)</ThemedText>
-              <View style={styles.liveBadge}>
-                <View style={styles.liveDot} />
-                <ThemedText style={styles.liveText}>EN VIVO</ThemedText>
-              </View>
-            </View>
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-              {spaces.map(s => (
-                <OccupancyItem
-                  key={s.id}
-                  label={s.title}
-                  percentage={s.status === 'available' ? 0 : 100}
-                  color={s.status === 'occupied' ? colors.error : s.status === 'maintenance' ? colors.muted : colors.primary}
-                  onPress={() => toggleSpaceStatus(s.id, s.status)}
-                />
-              ))}
-            </View>
-          </View>
+
 
           {/* Incidents Section */}
           <View style={styles.adminSection}>
@@ -428,7 +408,7 @@ const AdminDashboard: React.FC = () => {
 export const Dashboard: React.FC = () => {
   const { role, userName } = useRole();
   const { spaces, reservations: allReservations, reports } = useCampus();
-  const { notifications, markAsRead, deleteNotification, acceptInvitation } = useNotifications();
+  const { notifications, markAsRead, deleteNotification, acceptInvitation, declineInvitation } = useNotifications();
   const [selectedNoti, setSelectedNoti] = React.useState<Notification | null>(null);
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -480,11 +460,6 @@ export const Dashboard: React.FC = () => {
               color={s.status === 'occupied' ? colors.error : s.status === 'maintenance' ? colors.muted : colors.primary}
             />
           ))}
-          {spaces.length > 3 && (
-            <ThemedText style={{ fontSize: 10, color: colors.muted, marginTop: -12, fontWeight: '700' }}>
-              * {spaces[3].title}: {spaces[3].status === 'maintenance' ? 'CERRADO' : 'EN FUNCIONAMIENTO'}
-            </ThemedText>
-          )}
         </View>
       </View>
     );
@@ -551,24 +526,24 @@ export const Dashboard: React.FC = () => {
                 <ThemedText style={styles.modalDesc}>{selectedNoti.description}</ThemedText>
 
                 <View style={styles.modalActions}>
-                  {selectedNoti.type.startsWith('invite_group:') && (
+                  {selectedNoti.type?.startsWith('invite_group:') && (
                     <TouchableOpacity
                       style={[styles.modalBtn, { backgroundColor: colors.success, flex: 2 }]}
                       onPress={async () => {
-                        const groupId = selectedNoti.type.split(':')[1];
+                        const groupId = selectedNoti.type?.split(':')[1] || '';
+                        setSelectedNoti(null); // Close modal immediately
                         await acceptInvitation(selectedNoti.id, groupId);
-                        setSelectedNoti(null);
                       }}
                     >
                       <ThemedText style={styles.modalBtnText}>Unirse al Grupo</ThemedText>
                     </TouchableOpacity>
                   )}
-                  {!selectedNoti.isRead && !selectedNoti.type.startsWith('invite_group:') && (
+                  {!selectedNoti.isRead && !selectedNoti.type?.startsWith('invite_group:') && (
                     <TouchableOpacity
                       style={[styles.modalBtn, { backgroundColor: colors.primary }]}
                       onPress={() => {
+                        setSelectedNoti(null); // Close modal immediately
                         markAsRead(selectedNoti.id);
-                        setSelectedNoti(null);
                       }}
                     >
                       <ThemedText style={styles.modalBtnText}>Marcar como leída</ThemedText>
@@ -576,9 +551,14 @@ export const Dashboard: React.FC = () => {
                   )}
                   <TouchableOpacity
                     style={[styles.modalBtn, { backgroundColor: colors.error, flex: 1 }]}
-                    onPress={() => {
-                      deleteNotification(selectedNoti.id);
-                      setSelectedNoti(null);
+                    onPress={async () => {
+                      setSelectedNoti(null); // Close modal immediately
+                      if (selectedNoti.type?.startsWith('invite_group:')) {
+                        const groupId = selectedNoti.type?.split(':')[1] || '';
+                        await declineInvitation(selectedNoti.id, groupId);
+                      } else {
+                        await deleteNotification(selectedNoti.id);
+                      }
                     }}
                   >
                     <ThemedText style={styles.modalBtnText}>Borrar</ThemedText>

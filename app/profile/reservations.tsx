@@ -12,7 +12,7 @@ import { useReservations, ReservationStatus } from '@/hooks/useReservations';
 import { useRole } from '@/hooks/useRole';
 import { TopNav } from '@/components/smart-campus/TopNav';
 
-const ReservationCard = ({ id, title, type, date, time, status, userName, role, onApprove, onReject, onDelete }: { id: string, title: string, type: string, date: string, time: string, status: ReservationStatus, userName?: string, role: string, onApprove?: () => void, onReject?: () => void, onDelete?: () => void }) => {
+const ReservationCard = ({ id, title, type, date, time, status, userName, role, creatorId, currentUserId, onApprove, onReject, onDelete }: { id: string, title: string, type: string, date: string, time: string, status: ReservationStatus, userName?: string, role: string, creatorId?: string, currentUserId?: string, onApprove?: () => void, onReject?: () => void, onDelete?: () => void }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
@@ -20,7 +20,7 @@ const ReservationCard = ({ id, title, type, date, time, status, userName, role, 
   const getStatusStyle = (s: ReservationStatus) => {
     const isLight = colorScheme === 'light';
     switch (s) {
-      case 'REVISIÓN': return { bg: isLight ? 'rgba(255, 149, 0, 0.1)' : 'rgba(255, 214, 10, 0.1)', text: isLight ? '#FF9500' : '#FFD60A', border: isLight ? 'rgba(255, 149, 0, 0.2)' : 'rgba(255, 214, 10, 0.2)' };
+      case 'PENDIENTE': return { bg: isLight ? 'rgba(255, 149, 0, 0.1)' : 'rgba(255, 214, 10, 0.1)', text: isLight ? '#FF9500' : '#FFD60A', border: isLight ? 'rgba(255, 149, 0, 0.2)' : 'rgba(255, 214, 10, 0.2)' };
       case 'CONFIRMADA': return { bg: isLight ? 'rgba(52, 199, 89, 0.1)' : 'rgba(0, 255, 0, 0.1)', text: isLight ? '#34C759' : '#00FF00', border: isLight ? 'rgba(52, 199, 89, 0.2)' : 'rgba(0, 255, 0, 0.2)' };
       case 'EN ESPERA': return { bg: isLight ? 'rgba(0, 122, 255, 0.1)' : 'rgba(10, 132, 255, 0.1)', text: isLight ? '#007AFF' : '#0A84FF', border: isLight ? 'rgba(0, 122, 255, 0.2)' : 'rgba(10, 132, 255, 0.2)' };
       case 'CANCELADA': return { bg: isLight ? 'rgba(255, 59, 48, 0.1)' : 'rgba(255, 69, 58, 0.1)', text: isLight ? '#FF3B30' : '#FF453A', border: isLight ? 'rgba(255, 59, 48, 0.2)' : 'rgba(255, 69, 58, 0.2)' };
@@ -30,16 +30,16 @@ const ReservationCard = ({ id, title, type, date, time, status, userName, role, 
 
   const statusStyle = getStatusStyle(status);
 
+  const isCreator = currentUserId === creatorId;
+
   return (
     <TouchableOpacity 
-      activeOpacity={role === 'admin' ? 0.7 : 1}
+      activeOpacity={0.7}
       onPress={() => {
-        if (role === 'admin') {
-          router.push({
-            pathname: '/spaces/details/[id]',
-            params: { id: id }
-          });
-        }
+        router.push({
+          pathname: '/spaces/details/[id]',
+          params: { id: id }
+        });
       }}
       style={[styles.resCard, { backgroundColor: colors.card, borderColor: colors.border }]}
     >
@@ -76,29 +76,38 @@ const ReservationCard = ({ id, title, type, date, time, status, userName, role, 
           </>
         ) : (
           <>
-            {status === 'CANCELADA' ? (
-              <TouchableOpacity 
-                style={[styles.actionBtn, { flex: 1, backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)', borderColor: colors.border, borderWidth: 1 }]} 
-                onPress={onDelete}
-              >
-                <Ionicons name="trash-outline" size={18} color={colors.text} style={{ marginRight: 8 }} />
-                <ThemedText style={{ color: colors.text, fontWeight: '800', fontSize: 13 }}>ELIMINAR REGISTRO</ThemedText>
-              </TouchableOpacity>
-            ) : (
-              <>
-                <TouchableOpacity style={[styles.actionBtn, styles.manageBtn]}>
-                  <ThemedText style={styles.manageBtnText}>GESTIONAR</ThemedText>
-                </TouchableOpacity>
+            {isCreator ? (
+              status === 'CANCELADA' ? (
                 <TouchableOpacity 
-                  style={[styles.actionBtn, styles.cancelBtn, { borderColor: colorScheme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)', backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.03)' }]}
-                  onPress={() => router.push({
-                    pathname: '/spaces/cancel/[id]',
-                    params: { id: id }
-                  })}
+                  style={[styles.actionBtn, { flex: 1, backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)', borderColor: colors.border, borderWidth: 1 }]} 
+                  onPress={onDelete}
                 >
-                  <ThemedText style={[styles.cancelBtnText, { color: colors.text }]}>CANCELAR</ThemedText>
+                  <Ionicons name="trash-outline" size={18} color={colors.text} style={{ marginRight: 8 }} />
+                  <ThemedText style={{ color: colors.text, fontWeight: '800', fontSize: 13 }}>ELIMINAR REGISTRO</ThemedText>
                 </TouchableOpacity>
-              </>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.actionBtn, styles.manageBtn]}
+                    onPress={() => router.push({ pathname: '/spaces/details/[id]', params: { id: id } })}
+                  >
+                    <ThemedText style={styles.manageBtnText}>GESTIONAR</ThemedText>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.actionBtn, styles.cancelBtn, { borderColor: colorScheme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)', backgroundColor: colorScheme === 'light' ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.03)' }]}
+                    onPress={() => router.push({ pathname: '/spaces/cancel/[id]', params: { id: id } })}
+                  >
+                    <ThemedText style={[styles.cancelBtnText, { color: colors.text }]}>CANCELAR</ThemedText>
+                  </TouchableOpacity>
+                </>
+              )
+            ) : (
+              <TouchableOpacity 
+                style={[styles.actionBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.primary }]}
+                onPress={() => router.push({ pathname: '/spaces/details/[id]', params: { id: id } })}
+              >
+                <ThemedText style={[styles.manageBtnText, { color: colors.primary }]}>VER DETALLES</ThemedText>
+              </TouchableOpacity>
             )}
           </>
         )}
@@ -115,7 +124,7 @@ export default function ReservationsScreen() {
   const { userId, role } = useRole();
 
   const displayReservations = role === 'admin' 
-    ? reservations.filter((r: any) => r.status === 'REVISIÓN') 
+    ? reservations.filter((r: any) => r.status === 'PENDIENTE') 
     : reservations;
 
   return (
@@ -143,6 +152,8 @@ export default function ReservationsScreen() {
               status={res.status}
               userName={res.userName}
               role={role || 'student'}
+              creatorId={res.creatorId}
+              currentUserId={userId}
               onApprove={() => updateStatus(res.id, 'CONFIRMADA')}
               onReject={() => updateStatus(res.id, 'CANCELADA')}
               onDelete={() => deleteReservation(res.id)}

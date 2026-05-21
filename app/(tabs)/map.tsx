@@ -32,6 +32,14 @@ export default function MapScreen() {
   const router = useRouter();
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    setActiveCategory(null);
+  };
+
   const pan = useRef(new Animated.ValueXY({
     x: -(MAP_WIDTH - SCREEN_WIDTH) / 2,
     y: -(MAP_HEIGHT - SCREEN_HEIGHT) / 2
@@ -245,15 +253,15 @@ export default function MapScreen() {
       color: '#8729b9ff'
     },
     {
-      id: 'BOQUE A',
+      id: 'BLOQUE_A',
       top: '55%',
       left: '5%',
-      label: 'BOQUE A',
+      label: 'BLOQUE A',
       icon: 'school',
-      title: 'Biblioteca',
-      subtitle: 'Centro de Recursos',
+      title: 'Bloque A',
+      subtitle: 'Aulas de Clase',
       category: 'ACADÉMICO',
-      rooms: 'Cap. 150',
+      rooms: 'Salones',
       wifi: 'Excelente',
       color: '#29b92bff'
     },
@@ -265,12 +273,53 @@ export default function MapScreen() {
       icon: 'flask',
       title: 'Laboratorio',
       subtitle: 'Investigación y Práctica',
-      category: 'TECNOLOGÍA',
+      category: 'ACADÉMICO',
       rooms: '8 Labs',
       wifi: 'Alta Velocidad',
       color: '#E74C3C'
     }
   ];
+
+  const filteredSearch = searchQuery.trim().length > 0 ? buildings.filter(b => b.title.toLowerCase().includes(searchQuery.toLowerCase()) || b.label.toLowerCase().includes(searchQuery.toLowerCase())) : [];
+  const categorySpaces = activeCategory ? buildings.filter(b => b.category === activeCategory) : [];
+
+  const zoomToBuilding = (b: any) => {
+    setSelectedBuilding(b);
+
+    const topPercent = parseFloat(b.top) / 100;
+    const leftPercent = parseFloat(b.left) / 100;
+    const targetScale = 2.5;
+
+    // The Animated map view is scaled from its own center (MAP_WIDTH/2, MAP_HEIGHT/2).
+    // We need to find the pan offset so the marker (Px, Py) appears centered on screen.
+    // After scaling, the point Px becomes: MAP_WIDTH/2 + (Px - MAP_WIDTH/2) * targetScale
+    // We want that to equal SCREEN_WIDTH/2 (plus any pan offset).
+    const Px = MAP_WIDTH * leftPercent;
+    const Py = MAP_HEIGHT * topPercent;
+
+    let newX = (SCREEN_WIDTH / 2) - MAP_WIDTH / 2 - (Px - MAP_WIDTH / 2) * targetScale;
+    let newY = (SCREEN_HEIGHT / 2) - MAP_HEIGHT / 2 - (Py - MAP_HEIGHT / 2) * targetScale;
+
+    const widthDiff = (MAP_WIDTH * targetScale - MAP_WIDTH) / 2;
+    const heightDiff = (MAP_HEIGHT * targetScale - MAP_HEIGHT) / 2;
+    const minX = -(MAP_WIDTH - SCREEN_WIDTH) - widthDiff;
+    const maxX = widthDiff;
+    const minY = -(MAP_HEIGHT - SCREEN_HEIGHT) - heightDiff;
+    const maxY = heightDiff;
+
+    if (newX > maxX) newX = maxX;
+    if (newX < minX) newX = minX;
+    if (newY > maxY) newY = maxY;
+    if (newY < minY) newY = minY;
+
+    Animated.parallel([
+      Animated.spring(scale, { toValue: targetScale, useNativeDriver: false }),
+      Animated.spring(pan, { toValue: { x: newX, y: newY }, useNativeDriver: false })
+    ]).start();
+
+    setSearchQuery('');
+    setActiveCategory(null);
+  };
 
   return (
     <View style={styles.container}>
@@ -329,37 +378,64 @@ export default function MapScreen() {
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color="#8E8E93" />
           <TextInput
-            placeholder="Search buildings, labs..."
+            placeholder="Buscar espacios, laboratorios..."
             placeholderTextColor="#8E8E93"
             style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={handleSearch}
           />
           <TouchableOpacity>
             <Ionicons name="options-outline" size={22} color={colors.tint} />
           </TouchableOpacity>
         </View>
 
+        {searchQuery.trim().length > 0 && (
+          <View style={styles.searchResults}>
+            {filteredSearch.map(b => (
+              <TouchableOpacity key={b.id} style={styles.searchResultItem} onPress={() => zoomToBuilding(b)}>
+                <Ionicons name={b.icon as any} size={16} color={b.color} />
+                <ThemedText style={styles.searchResultText}>{b.title}</ThemedText>
+              </TouchableOpacity>
+            ))}
+            {filteredSearch.length === 0 && (
+              <View style={styles.searchResultItem}>
+                <ThemedText style={styles.searchResultText}>No se encontraron resultados</ThemedText>
+              </View>
+            )}
+          </View>
+        )}
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={{ gap: 10, paddingRight: 24 }}>
-          <TouchableOpacity style={[styles.chip, { backgroundColor: '#007B3E' }]}>
-            <Ionicons name="school-outline" size={16} color="#FFF" />
-            <ThemedText style={styles.chipText}>ACADÉMICO</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.chip, { backgroundColor: '#DAAA00' }]}>
-            <Ionicons name="basketball-outline" size={16} color="#FFF" />
-            <ThemedText style={styles.chipText}>DEPORTES</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.chip, { backgroundColor: '#00A99D' }]}>
-            <Ionicons name="flask-outline" size={16} color="#FFF" />
-            <ThemedText style={styles.chipText}>LABS</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.chip, { backgroundColor: '#00482B' }]}>
-            <Ionicons name="restaurant-outline" size={16} color="#FFF" />
-            <ThemedText style={styles.chipText}>SERVICIOS</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.chip, { backgroundColor: '#79C000' }]}>
-            <Ionicons name="megaphone-outline" size={16} color="#FFF" />
-            <ThemedText style={styles.chipText}>CULTURA</ThemedText>
-          </TouchableOpacity>
+          {['ACADÉMICO', 'DEPORTES', 'TECNOLOGÍA', 'SERVICIOS', 'CULTURA'].map(cat => (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.chip, { backgroundColor: activeCategory === cat ? colors.primary : 'rgba(28, 28, 30, 0.95)' }]}
+              onPress={() => {
+                setActiveCategory(activeCategory === cat ? null : cat);
+                setSearchQuery('');
+              }}
+            >
+              <Ionicons name={cat === 'ACADÉMICO' ? 'school-outline' : cat === 'DEPORTES' ? 'basketball-outline' : cat === 'TECNOLOGÍA' ? 'flask-outline' : cat === 'SERVICIOS' ? 'restaurant-outline' : 'megaphone-outline'} size={16} color="#FFF" />
+              <ThemedText style={styles.chipText}>{cat}</ThemedText>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
+
+        {activeCategory && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryResultsScroll} contentContainerStyle={{ gap: 10, paddingRight: 24, paddingTop: 10 }}>
+            {categorySpaces.map(b => (
+              <TouchableOpacity key={b.id} style={styles.categoryResultItem} onPress={() => zoomToBuilding(b)}>
+                <Ionicons name={b.icon as any} size={14} color={b.color} />
+                <ThemedText style={styles.categoryResultText}>{b.title}</ThemedText>
+              </TouchableOpacity>
+            ))}
+            {categorySpaces.length === 0 && (
+              <View style={styles.categoryResultItem}>
+                <ThemedText style={styles.categoryResultText}>Sin espacios</ThemedText>
+              </View>
+            )}
+          </ScrollView>
+        )}
       </View>
 
       <View style={styles.zoomControls}>
@@ -705,5 +781,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
     color: '#000',
+  },
+  searchResults: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 16,
+    marginTop: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    maxHeight: 200,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+  },
+  searchResultText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  categoryResultsScroll: {
+    marginTop: 8,
+  },
+  categoryResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1C1C1E',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  categoryResultText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

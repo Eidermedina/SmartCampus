@@ -21,7 +21,8 @@ interface NotificationContextType {
   addNotification: (noti: any) => Promise<void>;
   sendNotificationToUser: (targetUserId: string, noti: any) => Promise<void>;
   refreshNotifications: () => Promise<void>;
-  acceptInvitation: (notificationId: string, groupId: string) => Promise<void>;
+  acceptInvitation: (notificationId: string, groupId: string) => Promise<boolean>;
+  declineInvitation: (notificationId: string, groupId: string) => Promise<boolean>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -79,6 +80,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteNotification = async (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
     try {
       await fetch(`${API_URL}/notifications/${id}`, { method: 'DELETE' });
       refreshNotifications();
@@ -125,21 +127,55 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const acceptInvitation = async (notificationId: string, groupId: string) => {
-    if (!userId || isNaN(parseInt(userId))) return;
+  const acceptInvitation = async (notificationId: string, groupId: string): Promise<boolean> => {
+    if (!userId || isNaN(parseInt(userId))) return false;
+    // Remove immediately from local state — don't wait for server
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
     try {
       const formData = new FormData();
       formData.append('notification_id', notificationId);
       formData.append('group_id', groupId);
       formData.append('user_id', userId);
 
-      await fetch(`${API_URL}/study-groups/accept-invitation`, {
+      const res = await fetch(`${API_URL}/study-groups/accept-invitation`, {
         method: 'POST',
         body: formData,
       });
-      refreshNotifications();
+      // Delay refresh so the backend DELETE completes before we re-fetch
+      setTimeout(() => refreshNotifications(), 2000);
+      return res.ok;
     } catch (error) {
       console.error('Error accepting invitation:', error);
+      return false;
+    }
+  };
+
+  const declineInvitation = async (notificationId: string, groupId: string): Promise<boolean> => {
+    if (!userId || isNaN(parseInt(userId))) return false;
+    // Remove immediately from local state — don't wait for server
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    try {
+      const formData = new FormData();
+      formData.append('notification_id', notificationId);
+      formData.append('group_id', groupId);
+      formData.append('user_id', userId);
+
+      const res = await fetch(`${API_URL}/study-groups/decline-invitation`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        console.warn('Decline invitation endpoint failed, falling back to deleteNotification');
+        await fetch(`${API_URL}/notifications/${notificationId}`, { method: 'DELETE' });
+      }
+      // Delay refresh so the backend DELETE completes before we re-fetch
+      setTimeout(() => refreshNotifications(), 2000);
+      return res.ok;
+    } catch (error) {
+      console.error('Error declining invitation, falling back to delete:', error);
+      await fetch(`${API_URL}/notifications/${notificationId}`, { method: 'DELETE' });
+      setTimeout(() => refreshNotifications(), 2000);
+      return false;
     }
   };
 
@@ -151,10 +187,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       addNotification,
       sendNotificationToUser,
       refreshNotifications,
-      acceptInvitation
+      acceptInvitation,
+      declineInvitation
     }}>
       {children}
     </NotificationContext.Provider>
+
   );
 }
 
