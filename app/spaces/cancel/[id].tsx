@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { useCampus } from '@/hooks/useCampus';
 import { useReservations } from '@/hooks/useReservations';
+import { useAuthStore } from '@/store/useAuthStore';
 import { API_URL } from '@/constants/Config';
 import { TopNav } from '@/components/smart-campus/TopNav';
 
@@ -19,13 +20,22 @@ export default function CancellationScreen() {
   
   const { reservations, refreshReservations } = useReservations();
   const { spaces, refreshData } = useCampus();
+  const token = useAuthStore(state => state.token);
 
   const reservation = reservations.find(r => r.id === id);
   const space = reservation ? spaces.find(s => s.id === reservation.spaceId) : null;
 
   const handleCancel = async () => {
     try {
-      await fetch(`${API_URL}/reservations/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/reservations/${id}?status=CANCELADA`, {
+        method: 'PUT',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        console.error('Error al cancelar:', err.detail);
+        return;
+      }
       await refreshData();
       await refreshReservations();
       router.back();

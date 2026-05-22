@@ -45,6 +45,13 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        // Notificar al backend para borrar el session_token (fire-and-forget)
+        const { userId } = get();
+        if (userId) {
+          const form = new FormData();
+          form.append('user_id', userId);
+          fetch(`${API_URL}/auth/logout`, { method: 'POST', body: form }).catch(() => {});
+        }
         set({
           token: null,
           refreshToken: null,
@@ -162,6 +169,22 @@ export const useAuthStore = create<AuthState>()(
                     console.log("DEBUG: Refresh token exitoso, guardando nuevo token");
                     set({ token: data.token, isRefreshingPromise: null });
                     return true;
+                } else if (res.status === 401 && data.detail === 'Sesión cerrada por otro dispositivo') {
+                    console.warn('DEBUG: Sesión cerrada por otro dispositivo. Cerrando sesión local...');
+                    set({ isRefreshingPromise: null });
+                    // Limpiar estado local sin llamar al backend (ya está limpio)
+                    set({
+                        token: null,
+                        refreshToken: null,
+                        userId: null,
+                        isAuthenticated: false,
+                        userName: 'Usuario',
+                        userMajor: '',
+                        userRole: 'student',
+                        userStatus: 'ACTIVO',
+                        studentId: 'N/A',
+                    });
+                    return false;
                 } else {
                     console.warn('DEBUG: Refresh token inactivo o expirado en el servidor:', data);
                     set({ isRefreshingPromise: null });
