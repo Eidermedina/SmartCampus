@@ -321,9 +321,21 @@ export const Auth: React.FC = () => {
                     style={[styles.input, { color: colors.text }]}
                     placeholder="Min. 8 caracteres"
                     placeholderTextColor={`${colors.text}44`}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
+                    value={!showPassword ? '•'.repeat(password.length) : password}
+                    onChangeText={(text) => {
+                      if (showPassword) {
+                        setPassword(text);
+                      } else {
+                        // Manual masking logic to bypass Android FLAG_SECURE (black screen in videocalls)
+                        if (text.length < password.length) {
+                          setPassword(password.slice(0, text.length));
+                        } else if (text.length > password.length) {
+                          const addedChars = text.slice(password.length);
+                          setPassword(password + addedChars);
+                        }
+                      }
+                    }}
+                    // secureTextEntry is intentionally removed to avoid black screens during presentations
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                     <Ionicons
