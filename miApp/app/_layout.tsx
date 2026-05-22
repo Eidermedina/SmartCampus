@@ -19,6 +19,7 @@ import { Splash } from '@/components/Splash';
 import { Intro } from '@/components/smart-campus/Intro';
 import { Auth } from '@/components/smart-campus/Auth';
 import { useAuthStore } from '@/store/useAuthStore';
+import { GlobalAlertProvider } from '@/components/smart-campus/GlobalAlertProvider';
 
 // Suppress the "Reduced motion" dev warning — device accessibility setting, not a code issue
 configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
@@ -176,7 +177,9 @@ export default function RootLayout() {
           <ReservationProvider>
             <NotificationProvider>
               <ReportProvider>
-                <RootContent />
+                <GlobalAlertProvider>
+                  <RootContent />
+                </GlobalAlertProvider>
               </ReportProvider>
             </NotificationProvider>
           </ReservationProvider>

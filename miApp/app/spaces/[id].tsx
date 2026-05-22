@@ -15,6 +15,8 @@ import { useReservations } from '@/hooks/useReservations';
 import { Modal, TextInput, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { API_URL } from '@/constants/Config';
 import * as ImagePicker from 'expo-image-picker';
+import { printToFileAsync } from 'expo-print';
+import { shareAsync } from 'expo-sharing';
 
 export default function SpaceDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -49,6 +51,11 @@ export default function SpaceDetailScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [spaceActive, setSpaceActive] = useState(true);
   const [spaceReservations, setSpaceReservations] = useState<{start: string, end: string}[]>([]);
+  
+  // PDF Download States
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfPeriod, setPdfPeriod] = useState<'day'|'week'>('day');
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   // Resolve space here (may be undefined before isLoaded)
   const space = spaces.find(s => s.id === id);
@@ -282,42 +289,217 @@ export default function SpaceDetailScreen() {
     }
   };
 
-  const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
+  const processImageResult = async (result: ImagePicker.ImagePickerResult) => {
+    if (!result.canceled && result.assets && result.assets.length > 0) {
       setIsUploading(true);
       try {
+        const asset = result.assets[0];
         const formData = new FormData();
-        // @ts-ignore
+        // @ts-ignore - React Native accepts this object format
         formData.append('file', {
-          uri: result.assets[0].uri,
-          name: 'space.jpg',
+          uri: asset.uri,
+          name: `space_${id}.jpg`,
           type: 'image/jpeg',
         });
 
-        // Simplified: using a direct URL for now since we don't have a dedicated upload endpoint that returns a URL easily
-        // But the requirement says "borrarla, editarla". Let's assume we update space.image_url
-        // For this demo, we'll just simulate the update with the URI (which works locally in Expo)
-        const updateRes = await fetch(`${API_URL}/spaces/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `building_id=${space.building_id}&name=${space.title}&capacity=${space.capacity}&category=${space.category}&floor=${space.floor}&image_url=${result.assets[0].uri}&is_active=${spaceActive}`
+        const uploadRes = await fetch(`${API_URL}/spaces/${id}/image`, {
+          method: 'POST',
+          body: formData,
+          // Do NOT set Content-Type header - let fetch set it with the correct boundary
         });
 
-        if (updateRes.ok) {
+        if (uploadRes.ok) {
+          const data = await uploadRes.json();
           Alert.alert('Imagen actualizada', 'La imagen de presentación ha sido actualizada correctamente.');
+          await refreshData();
+        } else {
+          const err = await uploadRes.text();
+          Alert.alert('Error', `No se pudo subir la imagen. (${uploadRes.status})`);
         }
-      } catch (e) {
-        Alert.alert('Error', 'No se pudo subir la imagen.');
+      } catch (e: any) {
+        Alert.alert('Error', 'No se pudo conectar con el servidor para subir la imagen.');
       } finally {
         setIsUploading(false);
       }
+    }
+  };
+
+  const handlePickImage = async () => {
+    Alert.alert(
+      'Actualizar Imagen',
+      '¿Cómo deseas agregar la nueva fotografía?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Tomar Foto',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permiso requerido', 'Se necesita acceso a la cámara para tomar fotos.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [16, 9],
+              quality: 0.8,
+            });
+            processImageResult(result);
+          }
+        },
+        {
+          text: 'Elegir de Galería',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permiso requerido', 'Se necesita acceso a tus fotos para elegir una imagen.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [16, 9],
+              quality: 0.8,
+            });
+            processImageResult(result);
+          }
+        }
+      ]
+    );
+  };
+
+  const generatePdfHtml = (period: 'day' | 'week') => {
+    const spaceName = space?.title || 'Espacio';
+    const todayStr = getRealDate();
+    let content = '';
+
+    if (period === 'day') {
+      const slots = getAllSlotsWithStatus();
+      const jsDay = new Date().getDay();
+      const dbDay = jsDay === 0 ? 6 : jsDay - 1;
+
+      content += `<h3>Horario de Hoy (${todayStr})</h3>`;
+      content += `<table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <tr style="background-color: #f2f2f2;">
+                      <th style="padding: 8px; border: 1px solid #ddd;">Hora</th>
+                      <th style="padding: 8px; border: 1px solid #ddd;">Estado</th>
+                    </tr>`;
+      slots.forEach(slot => {
+        const [startH] = slot.time.split(' - ')[0].split(':').map(Number);
+        const slotStart = startH;
+
+        // Verify if it's a fixed schedule (even if past)
+        const isBlockedByAdmin = adminSchedules.some((s: any) => {
+          if (s.day_of_week !== dbDay || !s.is_active || s.is_free) return false;
+          const [h] = s.start_time.split(':').map(Number);
+          const [eh] = s.end_time.split(':').map(Number);
+          return slotStart >= h && slotStart < eh;
+        });
+
+        let statusText = 'Disponible';
+        let color = '#007B3E';
+        
+        if (isBlockedByAdmin) {
+          statusText = 'Ocupado (Clase Fija)';
+          color = '#FF453A';
+        } else if (slot.status === 'blocked_schedule') {
+          statusText = 'Ocupado (Clase Fija)';
+          color = '#FF453A';
+        } else if (slot.status === 'blocked_reservation') {
+          statusText = 'Ocupado (Reserva)';
+          color = '#FF453A';
+        } else if (slot.status === 'past') {
+          statusText = 'Pasado';
+          color = '#8E8E93';
+        }
+        
+        content += `<tr>
+                      <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${slot.time}</td>
+                      <td style="padding: 8px; border: 1px solid #ddd; color: ${color};">${statusText}</td>
+                    </tr>`;
+      });
+      content += `</table>`;
+    } else {
+      const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      const allHours = [
+        '07:00 - 08:00', '08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00',
+        '11:00 - 12:00', '12:00 - 13:00', '13:00 - 14:00', '14:00 - 15:00',
+        '15:00 - 16:00', '16:00 - 17:00', '17:00 - 18:00', '18:00 - 19:00',
+        '19:00 - 20:00', '20:00 - 21:00', '21:00 - 22:00'
+      ];
+
+      content += `<h3>Horario Semanal Fijo</h3>`;
+      content += `<table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 10px;">
+                    <tr style="background-color: #00482B; color: #FFF;">
+                      <th style="padding: 8px; border: 1px solid #ddd;">Hora</th>`;
+      days.forEach(d => {
+        content += `<th style="padding: 8px; border: 1px solid #ddd;">${d}</th>`;
+      });
+      content += `</tr>`;
+
+      allHours.forEach(timeSlot => {
+        const [startH] = timeSlot.split(' - ')[0].split(':').map(Number);
+        const slotStart = startH;
+
+        content += `<tr>
+                      <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f2f2f2;">${timeSlot}</td>`;
+
+        for (let dayIdx = 0; dayIdx < 6; dayIdx++) {
+          const sched = adminSchedules.find((s: any) => {
+            if (s.day_of_week !== dayIdx || !s.is_active || s.is_free) return false;
+            const [h] = s.start_time.split(':').map(Number);
+            const [eh] = s.end_time.split(':').map(Number);
+            return slotStart >= h && slotStart < eh;
+          });
+
+          if (sched) {
+            content += `<td style="padding: 8px; border: 1px solid #ddd; background-color: #FFEBEE; color: #B71C1C; font-weight: 700;">
+                          ${sched.description || 'Clase'}
+                        </td>`;
+          } else {
+            content += `<td style="padding: 8px; border: 1px solid #ddd; color: #007B3E;">Libre</td>`;
+          }
+        }
+        content += `</tr>`;
+      });
+      content += `</table>`;
+    }
+
+    return `
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 20px; color: #333; }
+            h1 { color: #00482B; }
+            .header { border-bottom: 2px solid #00482B; padding-bottom: 10px; margin-bottom: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${spaceName}</h1>
+            <p><strong>Ubicación:</strong> ${space?.block} - Piso ${space?.floor}</p>
+          </div>
+          ${content}
+          <div style="margin-top: 40px; font-size: 12px; color: #888; text-align: center;">
+            Generado por SmartCampus App - ${new Date().toLocaleString('es-CO')}
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
+  const handleDownloadPdf = async () => {
+    setIsGeneratingPdf(true);
+    try {
+      const html = generatePdfHtml(pdfPeriod);
+      const { uri } = await printToFileAsync({ html });
+      await shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+      setShowPdfModal(false);
+    } catch (error) {
+      console.error('Error genering PDF', error);
+      Alert.alert('Error', 'No se pudo generar el documento PDF.');
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
@@ -420,7 +602,10 @@ export default function SpaceDetailScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.imageContainer}>
             <Image
-              source={{ uri: space.imageUrl || 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=1000&auto=format&fit=crop' }}
+              source={{ uri: space.imageUrl
+                ? (space.imageUrl.startsWith('/') ? `${API_URL}${space.imageUrl}` : space.imageUrl)
+                : 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=1000&auto=format&fit=crop'
+              }}
               style={styles.spaceImage}
             />
             <View style={styles.adminImageActions}>
@@ -723,8 +908,17 @@ export default function SpaceDetailScreen() {
 
         {/* Schedule */}
         <View style={styles.sectionHeader}>
-          <ThemedText style={styles.sectionTitle}>Horarios Disponibles</ThemedText>
-          <ThemedText style={styles.sectionDate}>{currentRealDate}</ThemedText>
+          <View>
+            <ThemedText style={styles.sectionTitle}>Horarios Disponibles</ThemedText>
+            <ThemedText style={styles.sectionDate}>{currentRealDate}</ThemedText>
+          </View>
+          <TouchableOpacity 
+            style={[styles.downloadBtn, { backgroundColor: isLight ? 'rgba(0,123,62,0.1)' : 'rgba(0,123,62,0.2)' }]}
+            onPress={() => setShowPdfModal(true)}
+          >
+            <Ionicons name="download-outline" size={20} color={colors.primary} />
+            <ThemedText style={[styles.downloadBtnText, { color: colors.primary }]}>Descargar</ThemedText>
+          </TouchableOpacity>
         </View>
 
         {/* Color Legend */}
@@ -929,6 +1123,52 @@ export default function SpaceDetailScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* PDF Download Modal */}
+      <Modal
+        visible={showPdfModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPdfModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <ThemedText style={styles.modalTitle}>Descargar Horario</ThemedText>
+            <ThemedText style={styles.modalSubtitle}>¿Qué horario deseas exportar a PDF?</ThemedText>
+
+            <View style={styles.pdfOptionsRow}>
+              <TouchableOpacity 
+                style={[styles.pdfOptionCard, pdfPeriod === 'day' && { borderColor: colors.primary, backgroundColor: 'rgba(0,123,62,0.05)' }]}
+                onPress={() => setPdfPeriod('day')}
+              >
+                <Ionicons name="today-outline" size={32} color={pdfPeriod === 'day' ? colors.primary : colors.muted} />
+                <ThemedText style={[styles.pdfOptionText, pdfPeriod === 'day' && { color: colors.primary }]}>Horario de Hoy</ThemedText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.pdfOptionCard, pdfPeriod === 'week' && { borderColor: colors.primary, backgroundColor: 'rgba(0,123,62,0.05)' }]}
+                onPress={() => setPdfPeriod('week')}
+              >
+                <Ionicons name="calendar-outline" size={32} color={pdfPeriod === 'week' ? colors.primary : colors.muted} />
+                <ThemedText style={[styles.pdfOptionText, pdfPeriod === 'week' && { color: colors.primary }]}>Semana Fija</ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.border }]} onPress={() => setShowPdfModal(false)}>
+                <ThemedText>Cancelar</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.primary }]} onPress={handleDownloadPdf} disabled={isGeneratingPdf}>
+                {isGeneratingPdf ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <ThemedText style={{ color: '#FFF' }}>Generar PDF</ThemedText>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -1090,4 +1330,9 @@ const styles = StyleSheet.create({
   previewValue: { fontSize: 14, fontWeight: '900', color: '#007B3E', marginTop: 2 },
   toggleSwitch: { width: 44, height: 24, borderRadius: 12, padding: 2, justifyContent: 'center' },
   toggleHandle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFF' },
+  downloadBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
+  downloadBtnText: { fontSize: 12, fontWeight: '800' },
+  pdfOptionsRow: { flexDirection: 'row', gap: 16, marginTop: 16 },
+  pdfOptionCard: { flex: 1, height: 100, borderWidth: 2, borderColor: '#E5E5EA', borderRadius: 16, justifyContent: 'center', alignItems: 'center', padding: 8 },
+  pdfOptionText: { fontSize: 13, fontWeight: '800', marginTop: 8, textAlign: 'center', color: '#8E8E93' },
 });

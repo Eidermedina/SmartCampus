@@ -18,12 +18,13 @@ export interface Report {
   createdAt: string;
   userName: string;
   userId: string;
+  adminComment?: string;
 }
 
 interface ReportContextType {
   reports: Report[];
   addReport: (report: any) => Promise<void>;
-  updateStatus: (id: string, status: ReportStatus) => Promise<void>;
+  updateStatus: (id: string, status: ReportStatus, adminComment?: string) => Promise<void>;
   refreshReports: () => Promise<void>;
 }
 
@@ -62,7 +63,8 @@ export function ReportProvider({ children }: { children: ReactNode }) {
           imageUri: i.image_url ? (i.image_url.startsWith('http') ? i.image_url : `${API_URL}${i.image_url}`) : undefined,
           createdAt: new Date(i.created_at).toLocaleString(),
           userName: i.user_name || 'Usuario Anónimo',
-          userId: String(i.user_id)
+          userId: String(i.user_id),
+          adminComment: i.admin_comment
         };
       });
       setReports(mappedReports);
@@ -124,7 +126,7 @@ export function ReportProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateStatus = async (id: string, status: ReportStatus) => {
+  const updateStatus = async (id: string, status: ReportStatus, adminComment?: string) => {
     try {
       let backendStatus = 'open';
       if (status === 'EN PROCESO') backendStatus = 'in_progress';
@@ -132,6 +134,9 @@ export function ReportProvider({ children }: { children: ReactNode }) {
 
       const formData = new FormData();
       formData.append('status', backendStatus);
+      if (adminComment) {
+        formData.append('admin_comment', adminComment);
+      }
 
       const res = await fetch(`${API_URL}/incidents/${id}/status`, {
         method: 'PATCH',

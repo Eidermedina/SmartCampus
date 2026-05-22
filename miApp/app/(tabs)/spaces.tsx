@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, TouchableOpacity, TextInput, Modal, Pressable, Image, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
@@ -64,11 +64,7 @@ const SpaceItem = ({ title, capacity, category, status, imageUrl, onPress, isAct
     <View style={[styles.spaceItem, { backgroundColor: colors.card, borderColor: colors.border, opacity: isActive === false ? 0.8 : 1 }]}>
       <View style={styles.spaceLeft}>
         <View style={styles.imagePlaceholder}>
-          {imageUrl ? (
-             <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%', borderRadius: 12 }} />
-          ) : (
-             <Ionicons name={getIcon()} size={22} color={colors.primary} />
-          )}
+          <Ionicons name={getIcon()} size={22} color={colors.primary} />
         </View>
         <View style={styles.spaceInfo}>
           <View style={styles.spaceHeader}>
@@ -177,10 +173,23 @@ const AdminSpaceCard: React.FC<{
 
 const AdminSpacesScreen = () => {
   const { spaces, toggleSpaceActive, isLoaded } = useCampus();
+  const { initialCategory, initialBlock } = useLocalSearchParams();
   const [activeFilter, setActiveFilter] = useState('Todas las Áreas');
   const [adminSelectedBlock, setAdminSelectedBlock] = useState('Bloque A');
   const [adminSelectedFloor, setAdminSelectedFloor] = useState(1);
   const router = useRouter();
+
+  React.useEffect(() => {
+    if (initialCategory) {
+      if (initialCategory === 'laboratorios') setActiveFilter('Laboratorios');
+      else if (initialCategory === 'auditorio') setActiveFilter('Auditorios');
+      else if (initialCategory === 'salones') setActiveFilter('Salones');
+      else if (initialCategory === 'canchas') setActiveFilter('Canchas');
+    }
+    if (initialBlock) {
+      setAdminSelectedBlock(initialBlock as string);
+    }
+  }, [initialCategory, initialBlock]);
 
   if (!isLoaded) return <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ThemedText>Cargando panel...</ThemedText></ThemedView>;
   const colorScheme = useColorScheme() ?? 'light';
@@ -261,10 +270,6 @@ const AdminSpacesScreen = () => {
           <View style={styles.adminHeaderSection}>
             <ThemedText style={styles.adminSectionLabel}>RESUMEN DE INSTALACIONES</ThemedText>
             <ThemedText style={styles.adminTitle}>Espacios del Campus</ThemedText>
-            <View style={styles.managersRow}>
-              <View style={styles.avatarStack}><View style={styles.avatar}><ThemedText style={styles.avatarText}>AD</ThemedText></View><View style={[styles.avatar, { marginLeft: -10, backgroundColor: colors.primary }]}><ThemedText style={styles.avatarText}>SM</ThemedText></View></View>
-              <ThemedText style={styles.managersText}>2 Gestores en línea</ThemedText>
-            </View>
           </View>
           {renderFilters()}
           {activeFilter === 'Salones' && (
@@ -300,7 +305,7 @@ const AdminSpacesScreen = () => {
               <TouchableOpacity key={s.id} onPress={() => router.push(`/spaces/${s.id}`)}>
                 <AdminSpaceCard 
                   id={s.id}
-                  type={s.category === 'auditorio' ? 'image' : 'icon'} 
+                  type='icon'
                   title={s.title} 
                   location={s.block} 
                   capacity={s.capacity}
@@ -325,11 +330,18 @@ export default function SpacesScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isLight = colorScheme === 'light';
-  const [selectedCategory, setSelectedCategory] = useState<CategoryType>('salones');
-  const [selectedBlock, setSelectedBlock] = useState<string>('Bloque A');
+  
+  const { initialCategory, initialBlock } = useLocalSearchParams();
+  const [selectedCategory, setSelectedCategory] = useState<CategoryType>((initialCategory as CategoryType) || 'salones');
+  const [selectedBlock, setSelectedBlock] = useState<string>((initialBlock as string) || 'Bloque A');
   const [selectedFloor, setSelectedFloor] = useState<number>(1);
   const [searchText, setSearchText] = useState('');
   const router = useRouter();
+
+  React.useEffect(() => {
+    if (initialCategory) setSelectedCategory(initialCategory as CategoryType);
+    if (initialBlock) setSelectedBlock(initialBlock as string);
+  }, [initialCategory, initialBlock]);
 
   if (!isLoaded) return <ThemedView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ThemedText>Cargando espacios...</ThemedText></ThemedView>;
 
@@ -452,7 +464,7 @@ const styles = StyleSheet.create({
   // ADMIN STYLES
   adminHeaderSection: { marginBottom: 32 },
   adminSectionLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 12 },
-  adminTitle: { fontSize: 32, fontWeight: '900', marginBottom: 16 },
+  adminTitle: { fontSize: 28, fontWeight: '900', lineHeight: 36, marginBottom: 16 },
   managersRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatarStack: { flexDirection: 'row' },
   avatar: { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 2 },

@@ -85,21 +85,23 @@ export function CampusProvider({ children }: { children: ReactNode }) {
       if (spacesRes.ok) {
         const spacesData = await spacesRes.json();
         if (Array.isArray(spacesData)) {
-          const mappedSpaces = spacesData.map((s: any) => ({
-            id: s.id.toString(),
-            title: s.name,
-            category: s.category || 'salones',
-            block: s.block || 'Edificio Principal',
-            capacity: s.capacity?.toString() || '0',
-            status: s.status as SpaceStatus,
-            floor: s.floor,
-            isActive: s.is_active !== false,
-            imageUrl: s.image_url,
-            building_id: s.building_id
-          }));
-          if (JSON.stringify(mappedSpaces) !== JSON.stringify(spacesRef.current)) {
-            setSpaces(mappedSpaces);
-          }
+          const mappedSpaces = spacesData.map((s: any) => {
+            // Only use image_url if it's a real URL (not a base64 blob which causes corruption)
+            const imageUrl = s.image_url && !s.image_url.startsWith('data:') ? s.image_url : undefined;
+            return {
+              id: s.id.toString(),
+              title: s.name,
+              category: s.category || 'salones',
+              block: s.block || 'Edificio Principal',
+              capacity: s.capacity?.toString() || '0',
+              status: s.status as SpaceStatus,
+              floor: s.floor,
+              isActive: s.is_active !== false,
+              imageUrl,
+              building_id: s.building_id
+            };
+          });
+          setSpaces(mappedSpaces);
         }
       }
 

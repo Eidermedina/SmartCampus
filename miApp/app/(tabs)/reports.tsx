@@ -101,7 +101,7 @@ const IncidentCard = ({ priority, time, title, location, date, status, actionTex
 const AdminReportsScreen = () => {
   const { reports, updateStatus } = useReports();
   const router = useRouter();
-  const [activeFilter, setActiveFilter] = useState('Todos los Reportes');
+  const [activeFilter, setActiveFilter] = useState('Recibidos');
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isLight = colorScheme === 'light';
@@ -120,7 +120,7 @@ const AdminReportsScreen = () => {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterContent}>
-          {['Todos los Reportes', 'Crítico', 'Medio', 'Bajo'].map(f => (
+          {['Recibidos', 'En Proceso', 'Resueltos'].map(f => (
             <TouchableOpacity
               key={f}
               onPress={() => setActiveFilter(f)}
@@ -133,11 +133,9 @@ const AdminReportsScreen = () => {
 
         <View style={styles.incidentList}>
           {reports.filter((r: any) => {
-            if (activeFilter === 'Todos los Reportes') return true;
-            const p = r.priority.toUpperCase();
-            if (activeFilter === 'Crítico' && p === 'ALTA') return true;
-            if (activeFilter === 'Medio' && p === 'MEDIA') return true;
-            if (activeFilter === 'Bajo' && p === 'BAJA') return true;
+            if (activeFilter === 'Recibidos' && r.status === 'PENDIENTE') return true;
+            if (activeFilter === 'En Proceso' && r.status === 'EN PROCESO') return true;
+            if (activeFilter === 'Resueltos' && r.status === 'RESUELTO') return true;
             return false;
           }).map((r: any) => (
             <IncidentCard
@@ -156,11 +154,9 @@ const AdminReportsScreen = () => {
             />
           ))}
           {reports.filter((r: any) => {
-            if (activeFilter === 'Todos los Reportes') return true;
-            const p = r.priority.toUpperCase();
-            if (activeFilter === 'Crítico' && p === 'ALTA') return true;
-            if (activeFilter === 'Medio' && p === 'MEDIA') return true;
-            if (activeFilter === 'Bajo' && p === 'BAJA') return true;
+            if (activeFilter === 'Recibidos' && r.status === 'PENDIENTE') return true;
+            if (activeFilter === 'En Proceso' && r.status === 'EN PROCESO') return true;
+            if (activeFilter === 'Resueltos' && r.status === 'RESUELTO') return true;
             return false;
           }).length === 0 && (
               <ThemedText style={{ textAlign: 'center', marginTop: 40, color: colors.muted }}>No hay reportes pendientes.</ThemedText>
