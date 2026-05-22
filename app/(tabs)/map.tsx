@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, PanResponder, ScrollView, StatusBar, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { useCampus } from '@/hooks/useCampus';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAP_SCALE = 2.5;
@@ -30,6 +31,7 @@ export default function MapScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
+  const { spaces } = useCampus();
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -473,32 +475,76 @@ export default function MapScreen() {
             </View>
 
             <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <Ionicons name="business-outline" size={22} color={colors.primary} style={{ marginRight: 12 }} />
-                <View>
-                  <ThemedText style={styles.statLabel}>SALONES</ThemedText>
-                  <ThemedText style={styles.statValue}>{selectedBuilding.rooms}</ThemedText>
-                </View>
-              </View>
-              <View style={styles.statCard}>
-                <Ionicons name="wifi-outline" size={22} color={colors.primary} style={{ marginRight: 12 }} />
-                <View>
-                  <ThemedText style={styles.statLabel}>CONEXIÓN</ThemedText>
-                  <ThemedText style={styles.statValue}>{selectedBuilding.wifi}</ThemedText>
-                </View>
-              </View>
+              {['BIBLIOTECA', 'CAF_HUECO', 'CAF_RINCON', 'SALON DESCANSO'].includes(selectedBuilding.id) ? (
+                <>
+                  <View style={styles.statCard}>
+                    <Ionicons name="people-outline" size={22} color={colors.primary} style={{ marginRight: 12 }} />
+                    <View>
+                      <ThemedText style={styles.statLabel}>CONGESTIÓN</ThemedText>
+                      <ThemedText style={styles.statValue}>Media</ThemedText>
+                    </View>
+                  </View>
+                  {selectedBuilding.id === 'SALON DESCANSO' && (
+                    <View style={styles.statCard}>
+                      <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} style={{ marginRight: 12 }} />
+                      <View>
+                        <ThemedText style={styles.statLabel}>ESTADO</ThemedText>
+                        <ThemedText style={styles.statValue}>Habilitado</ThemedText>
+                      </View>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <>
+                  <View style={styles.statCard}>
+                    <Ionicons name="business-outline" size={22} color={colors.primary} style={{ marginRight: 12 }} />
+                    <View>
+                      <ThemedText style={styles.statLabel}>SALONES</ThemedText>
+                      <ThemedText style={styles.statValue}>{selectedBuilding.rooms}</ThemedText>
+                    </View>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Ionicons name="wifi-outline" size={22} color={colors.primary} style={{ marginRight: 12 }} />
+                    <View>
+                      <ThemedText style={styles.statLabel}>CONEXIÓN</ThemedText>
+                      <ThemedText style={styles.statValue}>{selectedBuilding.wifi}</ThemedText>
+                    </View>
+                  </View>
+                </>
+              )}
             </View>
 
-            <TouchableOpacity style={styles.viewBtn}>
-              <LinearGradient
-                colors={[colors.accent, colors.primary]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.viewGradient}
+            {!['BIBLIOTECA', 'CAF_HUECO', 'CAF_RINCON', 'SALON DESCANSO'].includes(selectedBuilding.id) && (
+              <TouchableOpacity 
+                style={styles.viewBtn}
+                onPress={() => {
+                  if (selectedBuilding.id === 'LAB') {
+                    router.push('/(tabs)/spaces?initialCategory=laboratorios');
+                  } else if (selectedBuilding.id === 'BLOQUE_A') {
+                    router.push('/(tabs)/spaces?initialCategory=salones&initialBlock=Bloque A');
+                  } else if (selectedBuilding.id === 'BLOQUE_D') {
+                    router.push('/(tabs)/spaces?initialCategory=salones&initialBlock=Bloque D');
+                  } else if (selectedBuilding.id === 'AUDITORIO') {
+                    router.push('/(tabs)/spaces?initialCategory=auditorio');
+                  } else if (selectedBuilding.id === 'FUTBOL') {
+                    const cancha = spaces.find((s: any) => s.title === 'Cancha Futbol');
+                    if (cancha) router.push(`/spaces/${cancha.id}`);
+                  } else if (selectedBuilding.id === 'MICRO') {
+                    const cancha = spaces.find((s: any) => s.title === 'Cancha Micro');
+                    if (cancha) router.push(`/spaces/${cancha.id}`);
+                  }
+                }}
               >
-                <ThemedText style={styles.viewBtnText}>View Schedule & Events</ThemedText>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={[colors.accent, colors.primary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.viewGradient}
+                >
+                  <ThemedText style={styles.viewBtnText}>View Schedule & Events</ThemedText>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       )}

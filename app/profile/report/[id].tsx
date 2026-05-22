@@ -1,6 +1,6 @@
-import React from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import React, { useState } from 'react';
+import { StyleSheet, View, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
@@ -45,11 +45,14 @@ const TimelineStep = ({ icon, title, date, active, isLast }: any) => {
 
 export default function ReportDetailScreen() {
   const { id } = useLocalSearchParams();
+  const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isLight = colorScheme === 'light';
   const { reports, updateStatus } = useReports();
   const { role } = useRole();
+  const [adminCommentInput, setAdminCommentInput] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
 
   const report = reports.find(r => String(r.id) === String(id));
 
@@ -140,6 +143,19 @@ export default function ReportDetailScreen() {
           ))}
         </View>
 
+        {/* Admin Comment Display */}
+        {report.adminComment && (
+          <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: -10 }]}>
+            <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8}}>
+              <Ionicons name="chatbubbles-outline" size={20} color={colors.primary} />
+              <ThemedText style={[styles.infoLabel, { color: colors.primary, marginBottom: 0 }]}>OBSERVACIONES DEL ADMIN</ThemedText>
+            </View>
+            <ThemedText style={{fontSize: 14, lineHeight: 22, color: colors.text, fontStyle: 'italic'}}>
+              "{report.adminComment}"
+            </ThemedText>
+          </View>
+        )}
+
         {/* Reporter */}
         <View style={[styles.reporterCard, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 24 }]}>
           <Ionicons name="person-circle-outline" size={40} color={colors.primary} />
@@ -152,43 +168,91 @@ export default function ReportDetailScreen() {
         {/* Admin Actions */}
         {role === 'admin' && (
           <View style={{ marginBottom: 40 }}>
-            <ThemedText style={{ fontSize: 18, fontWeight: '900', marginBottom: 16 }}>Cambiar Estado del Proceso</ThemedText>
-            <View style={{ gap: 14 }}>
+            <ThemedText style={{ fontSize: 18, fontWeight: '900', marginBottom: 16 }}>Actualizar Reporte</ThemedText>
+            
+            <ThemedText style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', marginBottom: 8 }}>ESTADO DEL REPORTE</ThemedText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
               {[
                 { label: 'PENDIENTE', value: 'PENDIENTE', color: colors.error, icon: 'alert-circle' },
                 { label: 'EN PROCESO', value: 'EN PROCESO', color: colors.warning, icon: 'construct' },
-                { label: 'MARCAR RESUELTO', value: 'RESUELTO', color: colors.success, icon: 'checkmark-done-circle' }
-              ].map(btn => (
-                <TouchableOpacity
-                  key={btn.value}
-                  style={{
-                    flexDirection: 'row',
-                    paddingVertical: 18,
-                    paddingHorizontal: 20,
-                    borderRadius: 20,
-                    backgroundColor: report.status === btn.value ? btn.color : 'rgba(150,150,150,0.05)',
-                    borderWidth: 2,
-                    borderColor: report.status === btn.value ? btn.color : 'transparent',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10
-                  }}
-                  onPress={async () => {
-                    await updateStatus(report.id, btn.value as any);
-                  }}
-                >
-                  <Ionicons name={btn.icon as any} size={20} color={report.status === btn.value ? '#FFF' : btn.color} />
-                  <ThemedText style={{
-                    fontWeight: '900',
-                    fontSize: 14,
-                    letterSpacing: 0.5,
-                    color: report.status === btn.value ? '#FFF' : btn.color
-                  }}>
-                    {btn.label}
-                  </ThemedText>
-                </TouchableOpacity>
-              ))}
+                { label: 'RESUELTO', value: 'RESUELTO', color: colors.success, icon: 'checkmark-done-circle' }
+              ].map(btn => {
+                const isSelected = (selectedStatus || report.status) === btn.value;
+                return (
+                  <TouchableOpacity
+                    key={btn.value}
+                    style={{
+                      flexDirection: 'row',
+                      paddingVertical: 12,
+                      paddingHorizontal: 16,
+                      borderRadius: 16,
+                      backgroundColor: isSelected ? btn.color : 'rgba(150,150,150,0.05)',
+                      borderWidth: 2,
+                      borderColor: isSelected ? btn.color : 'transparent',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      flexGrow: 1
+                    }}
+                    onPress={() => setSelectedStatus(btn.value)}
+                  >
+                    <Ionicons name={btn.icon as any} size={18} color={isSelected ? '#FFF' : btn.color} />
+                    <ThemedText style={{
+                      fontWeight: '900',
+                      fontSize: 12,
+                      letterSpacing: 0.5,
+                      color: isSelected ? '#FFF' : btn.color
+                    }}>
+                      {btn.label}
+                    </ThemedText>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
+
+            <ThemedText style={{ fontSize: 12, fontWeight: '700', color: '#8E8E93', marginBottom: 8 }}>AÑADIR OBSERVACIÓN (Opcional)</ThemedText>
+            <TextInput
+              style={{
+                backgroundColor: isLight ? '#F2F2F7' : '#111',
+                borderColor: isLight ? '#E5E5EA' : '#222',
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 16,
+                fontSize: 14,
+                color: isLight ? '#000' : '#FFF',
+                marginBottom: 20,
+                minHeight: 80,
+                textAlignVertical: 'top'
+              }}
+              placeholder="Ej: Se requiere comprar repuesto..."
+              placeholderTextColor={isLight ? "#8E8E93" : "#444"}
+              multiline
+              value={adminCommentInput !== null ? adminCommentInput : (report.adminComment || '')}
+              onChangeText={setAdminCommentInput}
+            />
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.primary,
+                paddingVertical: 18,
+                borderRadius: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 10
+              }}
+              onPress={async () => {
+                const finalComment = adminCommentInput !== null ? adminCommentInput : (report.adminComment || '');
+                const finalStatus = selectedStatus || report.status;
+                await updateStatus(report.id, finalStatus as any, finalComment);
+                router.back();
+              }}
+            >
+              <Ionicons name="save-outline" size={22} color="#FFF" />
+              <ThemedText style={{ color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 1 }}>
+                GUARDAR CAMBIOS
+              </ThemedText>
+            </TouchableOpacity>
           </View>
         )}
 

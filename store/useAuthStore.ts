@@ -126,7 +126,7 @@ export const useAuthStore = create<AuthState>()(
         const { refreshToken, isRefreshingPromise } = get();
         
         if (!refreshToken) {
-            console.error('DEBUG: No hay refresh token disponible');
+            // Se elimina el console.error para evitar logs rojos en un estado válido de sesión no autenticada
             return false;
         }
 
